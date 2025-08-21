@@ -96,16 +96,17 @@ The workspace includes VSCode settings for:
 ```
 src/
 ├── components/          # React components
+│   ├── ui               # Generic ui components
 │   ├── FileUpload.tsx  # File upload interface
 │   ├── HeaderMapping.tsx # Header mapping UI
 │   ├── DataPreview.tsx # Data preview table
 │   └── ImportProgress.tsx # Import progress tracking
-├── hooks/              # Custom React hooks
-│   └── useImportState.ts # Main state management
+├── state/              # Custom React XState
+│   └── importer.ts     # Main state management
 ├── types/              # TypeScript type definitions
 │   └── index.ts        # Core interfaces
-├── utils/              # Utility functions
-│   └── fileParser.ts   # File parsing logic
+├── lib/                # Shared utilities (shadcn utils, workers, helpers)
+│   └── workerClient.ts # Setup worker for file parsing
 ├── validation/         # Validation schemas
 │   └── schema.ts       # Yup validation schemas
 ├── workers/            # Web Workers
@@ -168,15 +169,3 @@ src/
 1. Modify the Yup schema in `src/validation/schema.ts`
 2. Add cross-field validation rules as needed
 3. Update error handling in components
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## License
-
-ISC

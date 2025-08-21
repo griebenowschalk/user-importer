@@ -18,6 +18,35 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
-    sourcemap: true,
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Core React
+          react: ["react", "react-dom"],
+
+          tanstack: ["@tanstack/react-table", "@tanstack/react-virtual"],
+
+          xstate: ["xstate"],
+
+          dateFns: ["date-fns"],
+
+          papaparse: ["papaparse"],
+
+          clsx: ["clsx"],
+
+          dropzone: ["react-dropzone"],
+
+          country: [
+            "react-country-flag",
+            "i18n-iso-countries",
+            "country-codes-list",
+          ],
+
+          // Phone number handling
+          phone: ["libphonenumber-js"],
+        },
+      },
+    },
   },
 });

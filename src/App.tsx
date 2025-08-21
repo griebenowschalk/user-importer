@@ -11,6 +11,9 @@ function App() {
   const { fileData, headerMappings, validatedData, importProgress } =
     state.context;
 
+  console.log(state.context);
+  console.log(state.value);
+
   return (
     <div className="app">
       <header className="app-header">
@@ -24,22 +27,13 @@ function App() {
             onFileUploaded={fileData =>
               send({ type: "FILE_PARSED", data: fileData })
             }
-            onNext={() => send({ type: "MAPPED", data: headerMappings })}
           />
         )}
 
         {state.matches("mapping") && fileData && (
           <HeaderMapping
-            fileData={fileData}
-            mappings={headerMappings}
-            onMappingsChange={headerMappings =>
+            onNext={headerMappings =>
               send({ type: "MAPPED", data: headerMappings })
-            }
-            onNext={() =>
-              send({
-                type: "VALIDATED",
-                data: validatedData || { valid: [], errors: [] },
-              })
             }
             onBack={() => send({ type: "BACK" })}
           />
