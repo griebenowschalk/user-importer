@@ -1,12 +1,15 @@
 import { wrap, transfer, Remote } from "comlink";
 import type { FileParseResult } from "@/types";
+import { checkIfExcel } from "./utils";
 
 type Api = {
-  parseFile(file: File): Promise<FileParseResult>;
+  parseFile(file: File, sheetNames?: string[]): Promise<FileParseResult>;
   parseExcelBuffer(
     buffer: ArrayBuffer,
-    fileName: string
+    fileName: string,
+    sheetNames?: string[]
   ): Promise<FileParseResult>;
+  getFileSheetNames(file: File): Promise<string[]>;
 };
 
 let remotePromise: Promise<Remote<Api>> | null = null;
@@ -37,22 +40,31 @@ function getRemote() {
  * @param file - The file to parse
  * @returns The parsed file
  */
-export async function parseFileOptimized(file: File) {
+export async function parseFileOptimized(file: File, sheetNames?: string[]) {
   const remote = await getRemote();
 
   // For Excel files, check size and route accordingly
-  if (file.name.toLowerCase().match(/\.(xls|xlsx)$/)) {
+  if (checkIfExcel(file.name)) {
     if (file.size > 5 * 1024 * 1024) {
       // 5MB threshold
       // Large file: zero-copy path
       const buffer = await file.arrayBuffer();
-      return remote.parseExcelBuffer(transfer(buffer, [buffer]), file.name);
+      return remote.parseExcelBuffer(
+        transfer(buffer, [buffer]),
+        file.name,
+        sheetNames
+      );
     } else {
       // Small file: regular path (avoid overhead)
-      return remote.parseFile(file);
+      return remote.parseFile(file, sheetNames);
     }
   } else {
     // CSV/JSON: always regular path
     return remote.parseFile(file);
   }
+}
+
+export async function getFileSheetNames(file: File) {
+  const remote = await getRemote();
+  return remote.getFileSheetNames(file);
 }

@@ -1,15 +1,20 @@
 import { FileParseResult } from "@/types";
 import { useDropzone } from "react-dropzone";
-import { parseFileOptimized } from "@/lib/workerClient";
+import { getFileSheetNames, parseFileOptimized } from "@/lib/workerClient";
 import { useState, useCallback } from "react";
 import { Button } from "./ui/button";
 import { Container } from "./ui/container";
+import { checkIfExcel } from "../lib/utils";
 
 interface FileUploadProps {
   onFileUploaded: (data: FileParseResult) => void;
+  onSheetSelected?: (sheetNames: string[], file: File) => void;
 }
 
-export function FileUpload({ onFileUploaded }: FileUploadProps) {
+export function FileUpload({
+  onFileUploaded,
+  onSheetSelected,
+}: FileUploadProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,8 +23,15 @@ export function FileUpload({ onFileUploaded }: FileUploadProps) {
     setError(null);
 
     try {
+      if (checkIfExcel(file.name)) {
+        const sheetNames = await getFileSheetNames(file);
+        if (sheetNames.length > 1) {
+          onSheetSelected?.(sheetNames, file);
+          return;
+        }
+      }
+
       const result = await parseFileOptimized(file);
-      console.log("result", result);
       onFileUploaded(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to parse file");

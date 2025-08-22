@@ -8,6 +8,8 @@ import type {
 
 interface Ctx {
   fileData: FileParseResult | null;
+  sheetNames: string[];
+  file: File | null;
   headerMappings: HeaderMapping[];
   validatedData: { valid: any[]; errors: ValidationError[] } | null;
   importProgress: ImportResult | null;
@@ -15,6 +17,7 @@ interface Ctx {
 
 type EventPayloads = {
   FILE_PARSED: FileParseResult;
+  SHEET_SELECTION: { sheetNames: string[]; file: File };
   MAPPED: HeaderMapping[];
   VALIDATED: { valid: any[]; errors: ValidationError[] };
   PROGRESS: ImportResult;
@@ -38,6 +41,8 @@ export const importerMachine = createMachine({
   },
   context: {
     fileData: null,
+    sheetNames: [],
+    file: null,
     headerMappings: [],
     validatedData: null,
     importProgress: null,
@@ -45,6 +50,24 @@ export const importerMachine = createMachine({
   states: {
     upload: {
       on: {
+        FILE_PARSED: {
+          target: "mapping",
+          actions: assign(({ event }) => ({
+            fileData: event.data,
+          })),
+        },
+        SHEET_SELECTION: {
+          target: "sheetSelect",
+          actions: assign(({ event }) => ({
+            sheetNames: event.data.sheetNames,
+            file: event.data.file,
+          })),
+        },
+      },
+    },
+    sheetSelect: {
+      on: {
+        BACK: "upload",
         FILE_PARSED: {
           target: "mapping",
           actions: assign(({ event }) => ({
@@ -90,6 +113,8 @@ export const importerMachine = createMachine({
             headerMappings: [],
             validatedData: null,
             importProgress: null,
+            sheetNames: [],
+            file: null,
           }),
         },
       },

@@ -5,6 +5,7 @@ import { ImportProgress } from "./components/ImportProgress";
 import { useMachine } from "@xstate/react";
 import { importerMachine } from "./state/importer";
 import "./App.css";
+import { SheetSelection } from "./components/SheetSelection";
 
 function App() {
   const [state, send] = useMachine(importerMachine);
@@ -24,6 +25,17 @@ function App() {
       <main className="app-main">
         {state.matches("upload") && (
           <FileUpload
+            onFileUploaded={fileData =>
+              send({ type: "FILE_PARSED", data: fileData })
+            }
+            onSheetSelected={(sheetNames, file) =>
+              send({ type: "SHEET_SELECTION", data: { sheetNames, file } })
+            }
+          />
+        )}
+
+        {state.matches("sheetSelect") && fileData && (
+          <SheetSelection
             onFileUploaded={fileData =>
               send({ type: "FILE_PARSED", data: fileData })
             }

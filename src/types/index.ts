@@ -19,6 +19,7 @@ export interface User {
 
 export interface FileParseResult {
   headers: string[];
+  sheetNames?: string[];
   rows: Record<string, any>[];
   totalRows: number;
   fileType: "csv" | "xls" | "xlsx" | "json";
