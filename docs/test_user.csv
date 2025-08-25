@@ -1,0 +1,2 @@
+empId,name,surname,emailAddress,start,dept,division,jobTitle,region,cellphone,workCell,gender,country_code,town,dob,lang
+emp0001,John,Doe,john.doe@example.com,2021-01-01,Solutions,Users,Facilitator Lead Usability Manager,Western Cape,+27821234567,+27821230000,male,ZAF,Cape Town,1990-01-01,en

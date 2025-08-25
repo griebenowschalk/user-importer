@@ -32,6 +32,7 @@ export function FileUpload({
       }
 
       const result = await parseFileOptimized(file);
+      console.log(result);
       onFileUploaded(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to parse file");

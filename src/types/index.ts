@@ -17,12 +17,21 @@ export interface User {
   language: string;
 }
 
+export interface UserFieldMapping {
+  [sourceColumn: string]: keyof User;
+}
+
 export interface FileParseResult {
   headers: string[];
   sheetNames?: string[];
   rows: Record<string, any>[];
   totalRows: number;
   fileType: "csv" | "xls" | "xlsx" | "json";
+  columnMapping: {
+    mapped: Record<string, keyof User>; // "empId" → "employeeId"
+    unmapped: string[]; // ["workCell", "unknownField"]
+    allMappings: Record<string, string | null>; // "empId" → "employeeId", "workCell" → null
+  };
 }
 
 export interface HeaderMapping {

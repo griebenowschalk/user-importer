@@ -1,0 +1,20 @@
+[
+  {
+    "empId": "emp0001",
+    "name": "John",
+    "surname": "Doe",
+    "emailAddress": "john.doe@example.com",
+    "start": "2021-01-01",
+    "dept": "Solutions",
+    "division": "Users",
+    "jobTitle": "Facilitator Lead Usability Manager",
+    "region": "Western Cape",
+    "cellphone": "+27821234567",
+    "workCell": "+27821230000",
+    "gender": "male",
+    "country_code": "ZAF",
+    "town": "Cape Town",
+    "dob": "1990-01-01",
+    "lang": "en"
+  }
+]

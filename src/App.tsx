@@ -12,9 +12,6 @@ function App() {
   const { fileData, headerMappings, validatedData, importProgress } =
     state.context;
 
-  console.log(state.context);
-  console.log(state.value);
-
   return (
     <div className="app">
       <header className="app-header">
@@ -44,6 +41,7 @@ function App() {
 
         {state.matches("mapping") && fileData && (
           <HeaderMapping
+            fileData={fileData}
             onNext={headerMappings =>
               send({ type: "MAPPED", data: headerMappings })
             }
