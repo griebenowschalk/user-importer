@@ -1,8 +1,4 @@
-import {
-  FileParseResult,
-  HeaderMapping as HeaderMappingType,
-  User,
-} from "@/types";
+import { FileParseResult, User } from "@/types";
 import { useMemo, useState } from "react";
 import { Button } from "./ui/button";
 import { Typography } from "./ui/typography";
@@ -10,7 +6,7 @@ import { Container } from "./ui/container";
 import UserColumnMatcher from "../lib/userColumnMatcher";
 
 interface HeaderMappingProps {
-  onNext: (mappings: HeaderMappingType[]) => void;
+  onNext: (mappings: Record<string, keyof User>) => void;
   fileData: FileParseResult;
   onBack: () => void;
 }
@@ -18,6 +14,7 @@ interface HeaderMappingProps {
 export default function HeaderMapping({
   onBack,
   fileData,
+  onNext,
 }: HeaderMappingProps) {
   const originalHeaders = fileData.columnMapping.unmapped.concat(
     Object.keys(fileData.columnMapping.mapped)
@@ -59,7 +56,7 @@ export default function HeaderMapping({
   };
   // Send final mappings when user clicks next
   const handleNext = () => {
-    //onNext(currentMapping);
+    onNext(currentMapping);
   };
 
   return (
@@ -126,7 +123,6 @@ export default function HeaderMapping({
         </div>
       )}
 
-      {/* Header mapping implementation will go here */}
       <div className="flex flex-row gap-2 justify-end">
         <Button onClick={onBack}>Back</Button>
         <Button

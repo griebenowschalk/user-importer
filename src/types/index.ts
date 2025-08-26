@@ -34,13 +34,6 @@ export interface FileParseResult {
   };
 }
 
-export interface HeaderMapping {
-  sourceHeader: string;
-  targetField: keyof User | "ignore";
-  confidence: number;
-  alternatives: string[];
-}
-
 export interface ValidationError {
   row: number;
   field: keyof User;

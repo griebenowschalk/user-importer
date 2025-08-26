@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { useMachine } from "@xstate/react";
 import { importerMachine } from "./state/importer";
 import "./App.css";
+import { Typography } from "./components/ui/typography";
 
 const FileUpload = lazy(() => import("./components/FileUpload"));
 const HeaderMapping = lazy(() => import("./components/HeaderMapping"));
@@ -23,8 +24,10 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>User Importer</h1>
-        <p>Import users from CSV, Excel, or JSON files</p>
+        <Typography as="h1">User Importer</Typography>
+        <Typography as="p">
+          Import users from CSV, Excel, or JSON files
+        </Typography>
       </header>
 
       <main className="app-main">

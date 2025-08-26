@@ -1,8 +1,8 @@
 import { createMachine, assign } from "xstate";
 import type {
   FileParseResult,
-  HeaderMapping,
   ImportResult,
+  User,
   ValidationError,
 } from "@/types";
 
@@ -10,7 +10,7 @@ interface Ctx {
   fileData: FileParseResult | null;
   sheetNames: string[];
   file: File | null;
-  headerMappings: HeaderMapping[];
+  headerMappings: Record<string, keyof User>;
   validatedData: { valid: any[]; errors: ValidationError[] } | null;
   importProgress: ImportResult | null;
 }
@@ -18,7 +18,7 @@ interface Ctx {
 type EventPayloads = {
   FILE_PARSED: FileParseResult;
   SHEET_SELECTION: { sheetNames: string[]; file: File };
-  MAPPED: HeaderMapping[];
+  MAPPED: Record<string, keyof User>;
   VALIDATED: { valid: any[]; errors: ValidationError[] };
   PROGRESS: ImportResult;
   BACK: undefined;
@@ -43,7 +43,7 @@ export const importerMachine = createMachine({
     fileData: null,
     sheetNames: [],
     file: null,
-    headerMappings: [],
+    headerMappings: {},
     validatedData: null,
     importProgress: null,
   },
@@ -110,7 +110,7 @@ export const importerMachine = createMachine({
           target: "upload",
           actions: assign({
             fileData: null,
-            headerMappings: [],
+            headerMappings: {},
             validatedData: null,
             importProgress: null,
             sheetNames: [],
