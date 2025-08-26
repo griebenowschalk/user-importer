@@ -83,7 +83,7 @@ async function parseExcelFromBuffer(
 }
 
 function parseExcelSheet(workBook: WorkBook, sheetNames: string[]) {
-  console.log("📊 [Excel] Starting sheet analysis for sheets:", sheetNames);
+  console.log("[Excel] Starting sheet analysis for sheets:", sheetNames);
 
   // First pass: analyze all sheets to find the best header
   const sheetAnalysis = sheetNames
@@ -98,7 +98,7 @@ function parseExcelSheet(workBook: WorkBook, sheetNames: string[]) {
         UserColumnMatcher.analyzeHeaderQuality(potentialHeaders);
 
       console.log(
-        `📊 [Excel] Sheet "${sheetName}": ${potentialHeaders.length} headers, quality: ${headerQuality}`
+        `[Excel] Sheet "${sheetName}": ${potentialHeaders.length} headers, quality: ${headerQuality}`
       );
 
       return {
@@ -128,10 +128,10 @@ function parseExcelSheet(workBook: WorkBook, sheetNames: string[]) {
 
   // Use the best sheet's headers as master headers
   const masterHeaders = bestSheet?.headers as string[];
-  console.log("🎯 [Excel] Master headers:", masterHeaders);
+  console.log("[Excel] Master headers:", masterHeaders);
 
   const mapping = UserColumnMatcher.createUserFieldMapping(masterHeaders);
-  console.log("🔗 [Excel] Column mapping created:", mapping);
+  console.log("[Excel] Column mapping created:", mapping);
 
   // Combine all sheets using the master headers
   const allRows: Record<string, any>[] = [];
@@ -163,7 +163,7 @@ function parseExcelSheet(workBook: WorkBook, sheetNames: string[]) {
     mapping
   );
 
-  console.log("✅ [Excel] Final result:", {
+  console.log("[Excel] Final result:", {
     headers: hybridHeaders,
     totalRows: mappedRows.length,
     sampleRow: mappedRows[0],

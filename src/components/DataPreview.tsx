@@ -27,16 +27,13 @@ interface DataPreviewProps {
 }
 
 export default function DataPreview({
-  fileData: _fileData,
-  mappings: _mappings,
+  fileData,
+  mappings,
   validatedData: _validatedData,
   onValidatedDataChange: _onValidatedDataChange,
   onNext,
   onBack,
 }: DataPreviewProps) {
-  const fileData = _fileData;
-  const mappings = _mappings;
-
   const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(() => {
     const headers = fileData?.headers ?? [];
     return headers.map(sourceHeader => {
@@ -83,6 +80,23 @@ export default function DataPreview({
 
   const virtualItems = rowVirtualizer.getVirtualItems();
 
+  // fixed column widths based on content type
+  const getColumnWidth = (header: string) => {
+    if (header.includes("email")) return 200;
+    if (header.includes("language") || header.includes("country")) return 80;
+    if (
+      header.includes("name") ||
+      header.toLowerCase().includes("firstname") ||
+      header.toLowerCase().includes("lastname") ||
+      header.toLowerCase().includes("date") ||
+      header.toLowerCase().includes("phone")
+    )
+      return 120;
+    return 150; // default width
+  };
+
+  const headerGroups = table.getHeaderGroups();
+
   return (
     <Container className="data-preview">
       <Typography as="h2">Preview & Validate</Typography>
@@ -97,29 +111,31 @@ export default function DataPreview({
       </div>
       <div className="mt-4 border rounded-md">
         <div ref={parentRef} className="overflow-auto h-[400px]">
-          <table className="table-auto text-sm">
-            <thead className="sticky top-0 z-10 bg-gray-200">
-              {table.getHeaderGroups().map(headerGroup => (
-                <tr key={headerGroup.id} className="border border-gray-500">
-                  {headerGroup.headers.map((header, index) => (
-                    <th
-                      key={header.id}
-                      className={`px-3 py-2 text-left font-medium text-gray-700 whitespace-nowrap ${
-                        index !== headerGroup.headers.length - 1
-                          ? "border-r border-gray-500"
-                          : ""
-                      }`}
-                    >
-                      <span className="inline-block max-w-[200px] truncate">
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
-                      </span>
-                    </th>
-                  ))}
+          <table className="table-fixed w-max text-sm border-separate border-spacing-0">
+            <thead className="sticky top-0 z-10 bg-gray-200 relative after:content-[''] after:absolute after:inset-x-0 after:-bottom-px after:h-px after:bg-gray-500">
+              {headerGroups.map(headerGroup => (
+                <tr key={headerGroup.id}>
+                  {headerGroup.headers.map((header, index) => {
+                    return (
+                      <th
+                        key={header.id}
+                        className={`px-3 py-2 text-left font-medium text-gray-700 whitespace-nowrap overflow-hidden ${
+                          index !== headerGroup.headers.length - 1
+                            ? "border-r border-gray-500"
+                            : ""
+                        }`}
+                      >
+                        <span className="block w-full truncate">
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(
+                                header.column.columnDef.header,
+                                header.getContext()
+                              )}
+                        </span>
+                      </th>
+                    );
+                  })}
                 </tr>
               ))}
             </thead>
@@ -138,43 +154,53 @@ export default function DataPreview({
                     key={row.id}
                     className={virtualRow.index % 2 ? "bg-gray-50" : undefined}
                   >
-                    {row.getVisibleCells().map((cell, index) => (
-                      <td
-                        key={cell.id}
-                        className={`px-3 py-2 border-b border-gray-300 text-left whitespace-nowrap ${
-                          index !== columns.length - 1 ? "border-r" : ""
-                        }`}
-                      >
-                        {isEditing ? (
-                          <input
-                            className="w-full max-w-[200px] truncate bg-transparent outline-none"
-                            value={
-                              (rows[row.index]?.[cell.column.id as string] as
-                                | string
-                                | number
-                                | undefined) ?? ""
-                            }
-                            onChange={e => {
-                              const value = e.target.value;
-                              setRows(prev => {
-                                const next = [...prev];
-                                const current = { ...(next[row.index] ?? {}) };
-                                current[cell.column.id as string] = value;
-                                next[row.index] = current;
-                                return next;
-                              });
-                            }}
-                          />
-                        ) : (
-                          <span className="inline-block max-w-[200px] truncate align-middle">
-                            {flexRender(
-                              cell.column.columnDef.cell,
-                              cell.getContext()
-                            )}
-                          </span>
-                        )}
-                      </td>
-                    ))}
+                    {row.getVisibleCells().map((cell, index) => {
+                      const w = getColumnWidth(cell.column.id);
+                      return (
+                        <td
+                          key={cell.id}
+                          style={{
+                            width: `${w}px`,
+                            minWidth: `${w}px`,
+                            maxWidth: `${w}px`,
+                          }}
+                          className={`px-3 py-2 border-b border-gray-300 text-left whitespace-nowrap overflow-hidden ${
+                            index !== columns.length - 1 ? "border-r" : ""
+                          }`}
+                        >
+                          {isEditing ? (
+                            <input
+                              className="w-full truncate bg-transparent outline-none"
+                              value={
+                                (rows[row.index]?.[cell.column.id as string] as
+                                  | string
+                                  | number
+                                  | undefined) ?? ""
+                              }
+                              onChange={e => {
+                                const value = e.target.value;
+                                setRows(prev => {
+                                  const next = [...prev];
+                                  const current = {
+                                    ...(next[row.index] ?? {}),
+                                  };
+                                  current[cell.column.id as string] = value;
+                                  next[row.index] = current;
+                                  return next;
+                                });
+                              }}
+                            />
+                          ) : (
+                            <span className="block w-full truncate align-middle">
+                              {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext()
+                              )}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
                   </tr>
                 );
               })}

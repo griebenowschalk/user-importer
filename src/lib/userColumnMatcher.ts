@@ -222,7 +222,7 @@ class UserColumnMatcher {
           score: match.score,
         });
         console.log(
-          `✅ [UserColumnMatcher] First candidate for ${match.field}: "${header}"`
+          `[UserColumnMatcher] First candidate for ${match.field}: "${header}"`
         );
         continue;
       }
@@ -257,7 +257,7 @@ class UserColumnMatcher {
       mapping[candidate.header] = field;
     }
 
-    console.log("✅ [UserColumnMatcher] Final mapping:", mapping);
+    console.log("[UserColumnMatcher] Final mapping:", mapping);
     return mapping;
   }
 
@@ -293,7 +293,7 @@ class UserColumnMatcher {
     const exactMatch = this.index.get(normalizedHeader);
     if (exactMatch) {
       console.log(
-        `✅ [UserColumnMatcher] Exact match found: "${header}" → ${exactMatch}`
+        `[UserColumnMatcher] Exact match found: "${header}" → ${exactMatch}`
       );
       return { field: exactMatch, exactMatch: true };
     }
@@ -316,7 +316,7 @@ class UserColumnMatcher {
       };
     }
 
-    console.log(`❌ [UserColumnMatcher] No match found for "${header}"`);
+    console.log(`[UserColumnMatcher] No match found for "${header}"`);
     return null;
   }
 
