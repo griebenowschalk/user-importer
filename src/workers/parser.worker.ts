@@ -94,7 +94,8 @@ function parseExcelSheet(workBook: WorkBook, sheetNames: string[]) {
       if (jsonData.length === 0) return null;
 
       const potentialHeaders = jsonData[0] as any[];
-      const headerQuality = analyzeHeaderQuality(potentialHeaders);
+      const headerQuality =
+        UserColumnMatcher.analyzeHeaderQuality(potentialHeaders);
 
       console.log(
         `📊 [Excel] Sheet "${sheetName}": ${potentialHeaders.length} headers, quality: ${headerQuality}`
@@ -179,85 +180,6 @@ function parseExcelSheet(workBook: WorkBook, sheetNames: string[]) {
       masterHeaders
     ),
   };
-}
-
-function analyzeHeaderQuality(headers: any[]): number {
-  if (!headers || headers.length === 0) return 0;
-
-  let quality = 0;
-
-  // Check for empty/null headers
-  const nonEmptyHeaders = headers.filter(h => h && h.toString().trim() !== "");
-  quality += nonEmptyHeaders.length * 2;
-
-  // Check for duplicate headers
-  const uniqueHeaders = new Set(
-    nonEmptyHeaders.map(h => h.toString().toLowerCase())
-  );
-  quality += uniqueHeaders.size;
-
-  // Penalize for empty headers
-  quality -= (headers.length - nonEmptyHeaders.length) * 3;
-
-  // Bonus for common header patterns (refined list)
-  const commonHeaders = [
-    // Core identifiers
-    "id",
-    "employeeid",
-    "employee id",
-
-    // Names (multiple variations)
-    "firstname",
-    "first name",
-    "firstname",
-    "givenname",
-    "given name",
-    "lastname",
-    "last name",
-    "surname",
-    "familyname",
-    "family name",
-
-    // Contact info
-    "email",
-    "email address",
-    "phone",
-    "phone number",
-    "mobile",
-    "mobile number",
-    "cell",
-    "cellphone",
-
-    // Work info
-    "department",
-    "division",
-    "team",
-    "position",
-    "jobtitle",
-    "job title",
-    "role",
-
-    // Location
-    "country",
-    "city",
-    "region",
-    "area",
-
-    // Dates
-    "startdate",
-    "start date",
-    "hiredate",
-    "hire date",
-    "birthdate",
-    "date of birth",
-    "dob",
-  ];
-
-  commonHeaders.forEach(common => {
-    if (uniqueHeaders.has(common)) quality += 1;
-  });
-
-  return quality;
 }
 
 /**

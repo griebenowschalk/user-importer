@@ -5,13 +5,14 @@ import { useState, useCallback } from "react";
 import { Button } from "./ui/button";
 import { Container } from "./ui/container";
 import { checkIfExcel } from "../lib/utils";
+import { Typography } from "./ui/typography";
 
 interface FileUploadProps {
   onFileUploaded: (data: FileParseResult) => void;
   onSheetSelected?: (sheetNames: string[], file: File) => void;
 }
 
-export function FileUpload({
+export default function FileUpload({
   onFileUploaded,
   onSheetSelected,
 }: FileUploadProps) {
@@ -32,7 +33,6 @@ export function FileUpload({
       }
 
       const result = await parseFileOptimized(file);
-      console.log(result);
       onFileUploaded(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to parse file");
@@ -62,21 +62,20 @@ export function FileUpload({
 
   return (
     <Container>
-      <h2>Upload File</h2>
-      <p>Upload your CSV, Excel, or JSON file to get started</p>
+      <Typography as="h2">Upload File</Typography>
+      <Typography as="p">
+        Upload your CSV, Excel, or JSON file to get started
+      </Typography>
       <div
         {...getRootProps()}
-        className="border-2 border-dashed border-gray-300"
+        className="border-2 border-dashed border-gray-300 rounded-md"
       >
         <input disabled={isLoading} {...getInputProps()} />
         <div className="w-full h-[300px] flex flex-col items-center justify-center gap-4 p-4">
-          <p>Drag and drop a file here, or click to browse</p>
-          <Button
-            className="mb-4 cursor-pointer"
-            disabled={isLoading}
-            onClick={browse}
-            variant="secondary"
-          >
+          <Typography as="p">
+            Drag and drop a file here, or click to browse
+          </Typography>
+          <Button className="mb-4" disabled={isLoading} onClick={browse}>
             Browse
           </Button>
         </div>

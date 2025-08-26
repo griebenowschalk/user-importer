@@ -19,7 +19,7 @@ interface DataPreviewProps {
   onBack: () => void;
 }
 
-export function DataPreview({
+export default function DataPreview({
   fileData: _fileData,
   mappings: _mappings,
   validatedData: _validatedData,

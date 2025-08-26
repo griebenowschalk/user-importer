@@ -7,7 +7,7 @@ interface ImportProgressProps {
   onBack: () => void;
 }
 
-export function ImportProgress({
+export default function ImportProgress({
   data: _data,
   progress: _progress,
   onProgressChange: _onProgressChange,

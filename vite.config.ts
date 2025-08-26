@@ -43,6 +43,10 @@ export default defineConfig({
             "country-codes-list",
           ],
 
+          fuse: ["fuse.js"],
+
+          tailwind: ["tailwindcss", "tailwind-merge"],
+
           // Phone number handling
           phone: ["libphonenumber-js"],
         },

@@ -12,6 +12,8 @@ class UserColumnMatcher {
       "empid",
       "staff id",
       "staffid",
+      "empno",
+      "emp number",
     ],
     firstName: [
       "firstname",
@@ -64,6 +66,7 @@ class UserColumnMatcher {
     ],
     region: ["region", "area", "territory", "zone", "district"],
     mobileNumber: [
+      "phone number",
       "mobilenumber",
       "mobile number",
       "mobile",
@@ -156,6 +159,38 @@ class UserColumnMatcher {
     }
 
     return this._fuse;
+  }
+
+  static analyzeHeaderQuality(headers: string[]): number {
+    if (!headers || headers.length === 0) return 0;
+
+    let quality = 0;
+
+    // Check for empty/null headers
+    const nonEmptyHeaders = headers.filter(
+      h => h && h.toString().trim() !== ""
+    );
+    quality += nonEmptyHeaders.length * 2;
+
+    // Check for duplicate headers
+    const uniqueHeaders = new Set(
+      nonEmptyHeaders.map(h => h.toString().toLowerCase())
+    );
+    quality += uniqueHeaders.size;
+
+    // Penalize for empty headers
+    quality -= (headers.length - nonEmptyHeaders.length) * 3;
+
+    // Bonus for common header patterns (refined list)
+    const commonHeaders = Object.values(
+      UserColumnMatcher.FIELD_VARIATIONS
+    ).flat();
+
+    commonHeaders.forEach(common => {
+      if (uniqueHeaders.has(common)) quality += 1;
+    });
+
+    return quality;
   }
 
   /**
@@ -369,30 +404,35 @@ class UserColumnMatcher {
   }
 
   /**
-   * Validates if a mapping is valid (no conflicts)
+   * Gets available User fields for a specific header (excludes current mapping)
    * @param mapping - Current mapping
-   * @param sourceHeader - Source header to check
-   * @param targetField - Target User field to check
-   * @returns Validation result
+   * @param currentHeader - Header being mapped (to exclude its current mapping)
+   * @returns Array of available User fields for this header
    */
-  static validateMapping(
+  static getAvailableFieldsForHeader(
     mapping: Record<string, keyof User>,
-    sourceHeader: string,
-    targetField: keyof User
-  ): { isValid: boolean; conflicts: string[] } {
-    const conflicts: string[] = [];
+    currentHeader: string
+  ): (keyof User)[] {
+    const currentField = mapping[currentHeader];
+    const mappedFields = new Set(Object.values(mapping));
 
-    // Check if this target field is already mapped to another header
-    for (const [header, field] of Object.entries(mapping)) {
-      if (field === targetField && header !== sourceHeader) {
-        conflicts.push(header);
+    // If this header is already mapped, include its current field as an option
+    const availableFields = Object.values(mapping).filter(
+      field => field !== currentField
+    );
+
+    // Add all unmapped fields
+    const allUserFields: (keyof User)[] = Object.keys(
+      UserColumnMatcher.FIELD_VARIATIONS
+    ) as (keyof User)[];
+
+    allUserFields.forEach(field => {
+      if (!mappedFields.has(field)) {
+        availableFields.push(field);
       }
-    }
+    });
 
-    return {
-      isValid: conflicts.length === 0,
-      conflicts,
-    };
+    return availableFields;
   }
 
   /**
@@ -404,24 +444,9 @@ class UserColumnMatcher {
     mapping: Record<string, keyof User>
   ): (keyof User)[] {
     const mappedFields = new Set(Object.values(mapping));
-    const allUserFields: (keyof User)[] = [
-      "employeeId",
-      "firstName",
-      "lastName",
-      "email",
-      "startDate",
-      "department",
-      "division",
-      "position",
-      "region",
-      "mobileNumber",
-      "workPhoneNumber",
-      "gender",
-      "country",
-      "city",
-      "dateOfBirth",
-      "language",
-    ];
+    const allUserFields: (keyof User)[] = Object.keys(
+      UserColumnMatcher.FIELD_VARIATIONS
+    ) as (keyof User)[];
 
     return allUserFields.filter(field => !mappedFields.has(field));
   }
