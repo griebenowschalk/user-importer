@@ -85,9 +85,8 @@ export default function DataPreview({
     if (header.includes("email")) return 200;
     if (header.includes("language") || header.includes("country")) return 80;
     if (
-      header.includes("name") ||
-      header.toLowerCase().includes("firstname") ||
-      header.toLowerCase().includes("lastname") ||
+      header.toLowerCase().includes("name") ||
+      header.toLowerCase().includes("id") ||
       header.toLowerCase().includes("date") ||
       header.toLowerCase().includes("phone")
     )

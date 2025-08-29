@@ -1,3 +1,5 @@
+import type { rowHooks } from "../validation/schema";
+
 export interface User {
   employeeId: string;
   firstName: string;
@@ -54,4 +56,122 @@ export interface BatchResult {
   success: boolean;
   count: number;
   errors?: ValidationError[];
+}
+
+export type CleaningChangeType =
+  | "trimmed"
+  | "caseChanged"
+  | "normalized"
+  | "customHook"
+  | "rowHook";
+
+export type Complexity = "low" | "medium" | "high";
+export type TrimType = "both" | "left" | "right" | "normalizeSpaces";
+export type CaseType = "lower" | "upper" | "none";
+export type ColumnType =
+  | "string"
+  | "email"
+  | "date"
+  | "phone"
+  | "category"
+  | "country";
+
+export type RowData = Record<string, unknown>;
+
+export type ColumnHook = (
+  value: unknown,
+  context: { field: string; row: RowData }
+) => unknown;
+export type RowHook = (row: RowData) => RowData;
+
+export interface CleaningRule {
+  type: ColumnType;
+  trim?: TrimType;
+  case?: CaseType;
+  normalize?: {
+    phoneDigitsOnly?: boolean;
+    toISODate?: boolean;
+    toISO3?: boolean;
+  };
+  columnHookId?: string;
+  options?: Record<string, unknown>;
+  regex?: RegExp;
+  unique?: {
+    ignoreCase?: boolean;
+    ignoreNulls?: boolean;
+  };
+}
+
+// Performance metadata
+export interface ValidationMetadata {
+  totalRows: number;
+  processedRows: number;
+  errorCount: number;
+  changeCount: number;
+  estimatedTimeRemaining: number;
+}
+
+// Cleaning changes tracking
+export interface CleaningChange {
+  row: number;
+  field: keyof User;
+  originalValue: unknown;
+  cleanedValue: unknown;
+  changeType: CleaningChangeType[];
+  description: string;
+}
+
+export interface CleaningResult {
+  rows: Record<string, unknown>[];
+  errors: ValidationError[];
+  changes: CleaningChange[];
+}
+
+// Validation chunks for streaming
+export interface ValidationChunk extends CleaningResult {
+  startRow: number;
+  endRow: number;
+}
+
+// Overall validation progress
+export interface ValidationProgress {
+  chunks: ValidationChunk[];
+  metadata: ValidationMetadata;
+  isComplete: boolean;
+}
+
+// Compiled config for performance
+export interface CompiledConfig {
+  bySourceHeader: Map<
+    string,
+    {
+      target: keyof User;
+      rule: CleaningRule;
+      optionSet?: Set<string>;
+      regex?: RegExp;
+      validators: Array<(value: unknown) => string | null>;
+    }
+  >;
+  byTarget: Map<keyof User, CleaningRule>;
+  rowHooks: typeof rowHooks;
+  // Performance flags
+  hasUniquenessChecks: boolean;
+  hasComplexHooks: boolean;
+  estimatedComplexity: Complexity;
+}
+
+// Pipeline options
+export interface PipelineOptions {
+  chunkSize?: number;
+  batchSize?: number;
+  onProgress: (progress: ValidationProgress) => void;
+  enableStreaming?: boolean;
+  strategy?: "immediate" | "streaming" | "worker";
+}
+
+// Validation results
+export interface ValidationResult extends CleaningResult {
+  rowErrorMap: Map<number, Set<keyof User>>;
+  fieldErrorCounts: Record<keyof User, number>;
+  metadata: ValidationMetadata;
 }

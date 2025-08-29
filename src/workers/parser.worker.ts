@@ -335,7 +335,7 @@ async function parseCSV(file: File): Promise<FileParseResult> {
       skipEmptyLines: true,
       complete: results => {
         if (results.errors.length > 0) {
-          console.error("❌ [CSV] Parsing errors:", results.errors);
+          console.error("[CSV] Parsing errors:", results.errors);
           reject(
             new Error(
               `CSV parsing errors: ${results.errors
@@ -349,11 +349,11 @@ async function parseCSV(file: File): Promise<FileParseResult> {
         const rows = results.data as Record<string, any>[];
         const headers = results.meta.fields || [];
 
-        console.log("📄 [CSV] Headers found:", headers);
-        console.log("📄 [CSV] Total rows:", rows.length);
+        console.log("[CSV] Headers found:", headers);
+        console.log("[CSV] Total rows:", rows.length);
 
         const mapping = UserColumnMatcher.createUserFieldMapping(headers);
-        console.log("🔗 [CSV] Column mapping created:", mapping);
+        console.log("[CSV] Column mapping created:", mapping);
 
         const mappedRows = rows.map(row =>
           UserColumnMatcher.mapRowToUserHybrid(row, mapping)
@@ -364,7 +364,7 @@ async function parseCSV(file: File): Promise<FileParseResult> {
           mapping
         );
 
-        console.log("✅ [CSV] Final result:", {
+        console.log("[CSV] Final result:", {
           headers: hybridHeaders,
           totalRows: mappedRows.length,
           sampleRow: mappedRows[0],
@@ -396,7 +396,7 @@ async function parseCSV(file: File): Promise<FileParseResult> {
  * @returns The parsed file
  */
 async function parseJSON(file: File): Promise<FileParseResult> {
-  console.log("📋 [JSON] Starting JSON parsing");
+  console.log("[JSON] Starting JSON parsing");
 
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -419,11 +419,11 @@ async function parseJSON(file: File): Promise<FileParseResult> {
         const headers = Object.keys(data[0]);
         const rows = data as Record<string, any>[];
 
-        console.log("📋 [JSON] Headers found:", headers);
-        console.log("📋 [JSON] Total rows:", rows.length);
+        console.log("[JSON] Headers found:", headers);
+        console.log("[JSON] Total rows:", rows.length);
 
         const mapping = UserColumnMatcher.createUserFieldMapping(headers);
-        console.log("🔗 [JSON] Column mapping created:", mapping);
+        console.log("[JSON] Column mapping created:", mapping);
 
         const mappedRows = rows.map(row =>
           UserColumnMatcher.mapRowToUserHybrid(row, mapping)
@@ -434,7 +434,7 @@ async function parseJSON(file: File): Promise<FileParseResult> {
           mapping
         );
 
-        console.log("✅ [JSON] Final result:", {
+        console.log("[JSON] Final result:", {
           headers: hybridHeaders,
           totalRows: mappedRows.length,
           sampleRow: mappedRows[0],
