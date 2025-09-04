@@ -236,9 +236,13 @@ export default function DataPreview({
                       >
                         {row.getVisibleCells().map((cell, index) => {
                           const w = getColumnWidth(cell.column.id);
+                          const targetFieldId =
+                            (mappings as Record<string, string>)?.[
+                              cell.column.id
+                            ] ?? cell.column.id;
                           const isError = getGroupedFieldError(
                             groupedErrors,
-                            cell.column.id,
+                            targetFieldId,
                             showErrors,
                             row
                           );
@@ -246,7 +250,7 @@ export default function DataPreview({
                             !showErrors &&
                             getGroupedFieldChange(
                               groupedChanges,
-                              cell.column.id,
+                              targetFieldId,
                               row
                             );
                           return (
@@ -306,12 +310,12 @@ export default function DataPreview({
                                     {isError
                                       ? getGroupedFieldMessages(
                                           isError,
-                                          cell.column.id
+                                          targetFieldId
                                         )
                                       : isChange
                                         ? getGroupedFieldMessages(
                                             isChange,
-                                            cell.column.id
+                                            targetFieldId
                                           )
                                         : ""}
                                   </TooltipContent>

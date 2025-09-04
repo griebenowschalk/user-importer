@@ -149,12 +149,20 @@ async function validateChunk(rows: RowData[], startRow: number) {
   // yup
   const yupErrors = batchYup(withHooks.rows, startRow);
 
+  // Offset core and hook indices to global row numbers
+  const coreErrors = core.errors.map(e => ({ ...e, row: e.row + startRow }));
+  const coreChanges = core.changes.map(c => ({ ...c, row: c.row + startRow }));
+  const hookChanges = withHooks.changes.map(c => ({
+    ...c,
+    row: c.row + startRow,
+  }));
+
   return {
     startRow,
     endRow: startRow + rows.length,
     rows: withHooks.rows,
-    errors: [...core.errors, ...yupErrors],
-    changes: [...withHooks.changes, ...core.changes],
+    errors: [...coreErrors, ...yupErrors],
+    changes: [...hookChanges, ...coreChanges],
   };
 }
 
