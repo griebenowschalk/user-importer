@@ -54,6 +54,7 @@ export const userSchema = yup.object({
   email: yup
     .string()
     .optional()
+    .nullable()
     .email("Invalid email format")
     .max(80, "Email is too long")
     .meta({

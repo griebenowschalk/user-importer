@@ -74,20 +74,10 @@ function App() {
             <DataPreview
               fileData={fileData}
               mappings={headerMappings}
-              validatedData={validatedData}
-              onValidatedDataChange={validatedData =>
-                send({ type: "VALIDATED", data: validatedData })
-              }
-              onNext={() =>
+              onNext={validatedData =>
                 send({
-                  type: "PROGRESS",
-                  data: importProgress || {
-                    imported: 0,
-                    failed: 0,
-                    skipped: 0,
-                    errors: [],
-                    batchResults: [],
-                  },
+                  type: "VALIDATED",
+                  data: validatedData,
                 })
               }
               onBack={() => send({ type: "BACK" })}

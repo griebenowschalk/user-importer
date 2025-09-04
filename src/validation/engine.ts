@@ -5,7 +5,7 @@ import {
   trimValue,
   normalizeBasic,
 } from "../lib/utils";
-import type {
+import {
   CompiledConfig,
   CleaningRule,
   User,
@@ -15,6 +15,7 @@ import type {
   ValidationError,
 } from "../types";
 import { rowHooks } from "./schema";
+import { changes as changeLocalisation } from "../localisation/changes";
 
 export function compileConfig(
   mapping: Record<string, keyof User>,
@@ -48,7 +49,7 @@ export function compileConfig(
       const optionSet = getOptionSet(rule);
 
       validators.push(value => {
-        if (value == null) return null;
+        if (!value) return null;
         const key =
           typeof value === "string"
             ? rule.case === "upper"
@@ -141,27 +142,28 @@ export function validationCore(
       // Apply cleaning rules using the meta data
       if (meta.rule.trim) {
         cleanedValue = trimValue(cleanedValue as string, meta.rule.trim);
-        trackChanges.push("trimmed");
+        trackChanges.push(CleaningChangeType.trimmed);
       }
 
       if (meta.rule.case) {
         cleanedValue = normalizeCase(cleanedValue as string, meta.rule.case);
-        trackChanges.push("caseChanged");
+        trackChanges.push(CleaningChangeType.caseChanged);
       }
 
       if (meta.rule.normalize) {
         cleanedValue = normalizeBasic(cleanedValue, meta.rule, meta.target);
-        trackChanges.push("normalized");
+        trackChanges.push(CleaningChangeType.normalized);
       }
 
       if (cleanedValue !== originalValue) {
+        console.log("change", meta.target, originalValue, cleanedValue);
         changes.push({
           row: i,
           field: meta.target,
           originalValue,
           cleanedValue,
           changeType: trackChanges,
-          description: `Cleaned value for ${meta.target}`,
+          description: `${trackChanges.map(change => changeLocalisation[change]).join("\n ")}`,
         });
       }
 
@@ -189,9 +191,10 @@ export function validationCore(
       // Apply unique checks
       if (meta.rule.unique && uniqueTracker) {
         const tracker = uniqueTracker.get(meta.target);
-        const uniqueKey: string = meta.rule.unique.ignoreCase
-          ? (value as string).toLowerCase()
-          : String(value);
+        const uniqueKey: string =
+          meta.rule.unique.ignoreCase && value
+            ? (value as string).toLowerCase()
+            : String(value);
 
         if (meta.rule.unique.ignoreNulls && value == null) {
           continue;
@@ -214,6 +217,7 @@ export function validationCore(
     processedRows[i] = destinationRow;
   }
 
+  console.log("changes", changes);
   return {
     rows: processedRows,
     errors,

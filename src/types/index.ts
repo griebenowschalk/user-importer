@@ -58,12 +58,13 @@ export interface BatchResult {
   errors?: ValidationError[];
 }
 
-export type CleaningChangeType =
-  | "trimmed"
-  | "caseChanged"
-  | "normalized"
-  | "customHook"
-  | "rowHook";
+export enum CleaningChangeType {
+  trimmed = "trimmed",
+  caseChanged = "caseChanged",
+  normalized = "normalized",
+  customHook = "customHook",
+  rowHook = "rowHook",
+}
 
 export type Complexity = "low" | "medium" | "high";
 export type TrimType = "both" | "left" | "right" | "normalizeSpaces";
@@ -138,6 +139,31 @@ export interface ValidationProgress {
   chunks: ValidationChunk[];
   metadata: ValidationMetadata;
   isComplete: boolean;
+  groupedErrors?: GroupedRowError[];
+  groupedChanges?: GroupedRowChange[];
+}
+
+// Grouped error structures for better display
+export interface GroupedFieldError {
+  field: string;
+  messages: string[];
+  value: unknown;
+}
+
+export interface GroupedRowError {
+  row: number;
+  fields: GroupedFieldError[];
+}
+
+export interface GroupedFieldChange {
+  field: string;
+  messages: string[];
+  value: unknown;
+}
+
+export interface GroupedRowChange {
+  row: number;
+  fields: GroupedFieldChange[];
 }
 
 // Compiled config for performance
@@ -167,11 +193,4 @@ export interface PipelineOptions {
   onProgress: (progress: ValidationProgress) => void;
   enableStreaming?: boolean;
   strategy?: "immediate" | "streaming" | "worker";
-}
-
-// Validation results
-export interface ValidationResult extends CleaningResult {
-  rowErrorMap: Map<number, Set<keyof User>>;
-  fieldErrorCounts: Record<keyof User, number>;
-  metadata: ValidationMetadata;
 }
