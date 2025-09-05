@@ -45,9 +45,27 @@ export default function DataPreview({
   onNext,
   onBack,
 }: DataPreviewProps) {
+  const [showErrors, setShowErrors] = useState(false);
+  const [groupedErrors, setGroupedErrors] = useState<GroupedRowError[] | null>(
+    null
+  );
+  const [groupedChanges, setGroupedChanges] = useState<
+    GroupedRowChange[] | null
+  >(null);
+  const [rows, setRows] = useState<CleaningResult | null>(null);
+  const [validationProgress, setValidationProgress] =
+    useState<ValidationProgress | null>(null);
+
   const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(() => {
     const headers = fileData?.headers ?? [];
-    return headers.map(sourceHeader => {
+
+    const numberCol: ColumnDef<Record<string, unknown>> = {
+      id: "_row",
+      header: "#",
+      cell: info => String(info.row.index + 1),
+    };
+
+    const dataCols = headers.map(sourceHeader => {
       const mapped = mappings?.[sourceHeader];
       return {
         id: sourceHeader,
@@ -61,19 +79,11 @@ export default function DataPreview({
         },
       } as ColumnDef<Record<string, unknown>>;
     });
+
+    return [numberCol, ...dataCols];
   }, [fileData?.headers, mappings]);
 
   // const [isEditing, setIsEditing] = useState(false);
-  const [showErrors, setShowErrors] = useState(false);
-  const [groupedErrors, setGroupedErrors] = useState<GroupedRowError[] | null>(
-    null
-  );
-  const [groupedChanges, setGroupedChanges] = useState<
-    GroupedRowChange[] | null
-  >(null);
-  const [rows, setRows] = useState<CleaningResult | null>(null);
-  const [validationProgress, setValidationProgress] =
-    useState<ValidationProgress | null>(null);
 
   // keep local rows in sync when file changes
   useEffect(() => {
@@ -136,7 +146,13 @@ export default function DataPreview({
   // fixed column widths based on content type
   const getColumnWidth = (header: string) => {
     if (header.includes("email")) return 200;
-    if (header.includes("language") || header.includes("country")) return 80;
+    if (
+      header.includes("language") ||
+      header.includes("country") ||
+      header === "_row" ||
+      header === "#"
+    )
+      return 80;
     if (
       header.toLowerCase().includes("name") ||
       header.toLowerCase().includes("id") ||
@@ -236,23 +252,28 @@ export default function DataPreview({
                       >
                         {row.getVisibleCells().map((cell, index) => {
                           const w = getColumnWidth(cell.column.id);
+                          const isRowNumber = cell.column.id === "_row";
                           const targetFieldId =
                             (mappings as Record<string, string>)?.[
                               cell.column.id
                             ] ?? cell.column.id;
-                          const isError = getGroupedFieldError(
-                            groupedErrors,
-                            targetFieldId,
-                            showErrors,
-                            row
-                          );
+                          const isError = isRowNumber
+                            ? undefined
+                            : getGroupedFieldError(
+                                groupedErrors,
+                                targetFieldId,
+                                showErrors,
+                                row
+                              );
                           const isChange =
                             !showErrors &&
-                            getGroupedFieldChange(
-                              groupedChanges,
-                              targetFieldId,
-                              row
-                            );
+                            (isRowNumber
+                              ? undefined
+                              : getGroupedFieldChange(
+                                  groupedChanges,
+                                  targetFieldId,
+                                  row
+                                ));
                           return (
                             <td
                               key={cell.id}
@@ -262,8 +283,8 @@ export default function DataPreview({
                                 maxWidth: `${w}px`,
                               }}
                               className={`px-3 py-2 border-b border-gray-300 text-left whitespace-nowrap overflow-hidden 
-                              ${isChange && !isError ? "bg-blue-100" : ""} 
-                              ${isError ? "bg-red-100" : ""} 
+                              ${!isRowNumber && isChange && !isError ? "bg-blue-100" : ""} 
+                              ${!isRowNumber && isError ? "bg-red-100" : ""} 
                               ${index !== columns.length - 1 ? "border-r" : ""}`}
                             >
                               {/* {isEditing ? (
@@ -296,31 +317,40 @@ export default function DataPreview({
                           ) : (
                             
                           )} */}
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className="block w-full truncate align-middle">
-                                    {flexRender(
-                                      cell.column.columnDef.cell,
-                                      cell.getContext()
-                                    )}
-                                  </span>
-                                </TooltipTrigger>
-                                {isChange || isError ? (
-                                  <TooltipContent className="whitespace-pre-line">
-                                    {isError
-                                      ? getGroupedFieldMessages(
-                                          isError,
-                                          targetFieldId
-                                        )
-                                      : isChange
+                              {isRowNumber ? (
+                                <span className="block w-full truncate align-middle">
+                                  {flexRender(
+                                    cell.column.columnDef.cell,
+                                    cell.getContext()
+                                  )}
+                                </span>
+                              ) : (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="block w-full truncate align-middle">
+                                      {flexRender(
+                                        cell.column.columnDef.cell,
+                                        cell.getContext()
+                                      )}
+                                    </span>
+                                  </TooltipTrigger>
+                                  {isChange || isError ? (
+                                    <TooltipContent className="whitespace-pre-line">
+                                      {isError
                                         ? getGroupedFieldMessages(
-                                            isChange,
+                                            isError,
                                             targetFieldId
                                           )
-                                        : ""}
-                                  </TooltipContent>
-                                ) : null}
-                              </Tooltip>
+                                        : isChange
+                                          ? getGroupedFieldMessages(
+                                              isChange,
+                                              targetFieldId
+                                            )
+                                          : ""}
+                                    </TooltipContent>
+                                  ) : null}
+                                </Tooltip>
+                              )}
                             </td>
                           );
                         })}
@@ -349,6 +379,9 @@ export default function DataPreview({
         <div className="flex flex-row gap-2 justify-end">
           <Button onClick={onBack}>Back</Button>
           <Button
+            disabled={
+              !validationProgress?.isComplete || (rows?.errors?.length ?? 0) > 0
+            }
             onClick={() =>
               onNext({ valid: rows?.rows ?? [], errors: rows?.errors ?? [] })
             }

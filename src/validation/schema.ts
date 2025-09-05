@@ -1,7 +1,7 @@
 import * as yup from "yup";
 import type { CleaningRule, User } from "../types";
 
-const PATTERNS = {
+export const PATTERNS = {
   EMPLOYEE_ID: /^[a-z0-9-#]+$/,
   ISO_DATE: /^\d{4}-\d{2}-\d{2}$/,
   ISO_COUNTRY: /^[A-Z]{3}$/,
@@ -26,6 +26,7 @@ export const userSchema = yup.object({
       trim: "both",
       case: "lower",
       regex: PATTERNS.EMPLOYEE_ID,
+      columnHookId: "employeeId",
       unique: {
         ignoreCase: true,
       },

@@ -9,7 +9,6 @@ import {
   CompiledConfig,
   CleaningRule,
   User,
-  Complexity,
   CleaningChange,
   CleaningChangeType,
   ValidationError,
@@ -82,31 +81,19 @@ export function compileConfig(
     byTarget.set(target, rule);
   }
 
-  console.log(bySourceHeader);
-  console.log(byTarget);
+  console.log("bySourceHeader", bySourceHeader);
+  console.log("byTarget", byTarget);
 
   // Calculate performance characteristics
   const hasUniquenessChecks = Array.from(bySourceHeader.values()).some(
     m => m.rule.unique
   );
-  const hasComplexHooks = Array.from(bySourceHeader.values()).some(
-    m => m.rule.columnHookId || !!hooks.onEntryInitHookId
-  );
-  let estimatedComplexity: Complexity = "low";
-  if (hasUniquenessChecks || hasComplexHooks) {
-    estimatedComplexity = "medium";
-  }
-  if (hasUniquenessChecks && hasComplexHooks) {
-    estimatedComplexity = "high";
-  }
 
   return {
     bySourceHeader,
     byTarget,
     rowHooks: hooks,
     hasUniquenessChecks,
-    hasComplexHooks,
-    estimatedComplexity,
   };
 }
 
@@ -156,7 +143,6 @@ export function validationCore(
       }
 
       if (cleanedValue !== originalValue) {
-        console.log("change", meta.target, originalValue, cleanedValue);
         changes.push({
           row: i,
           field: meta.target,
@@ -205,7 +191,7 @@ export function validationCore(
           errors.push({
             row: i,
             field: meta.target,
-            message: `Duplicate value found in row ${firstRow}`,
+            message: `Duplicate value found in row ${firstRow ? firstRow + 1 : 0}`,
             value,
           });
         } else {
@@ -217,7 +203,6 @@ export function validationCore(
     processedRows[i] = destinationRow;
   }
 
-  console.log("changes", changes);
   return {
     rows: processedRows,
     errors,

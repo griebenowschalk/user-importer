@@ -1,8 +1,17 @@
 import type { ColumnHook, RowHook } from "../types";
+import { PATTERNS } from "../validation/schema";
 
 const columnHookRegistry: Record<string, ColumnHook> = {
-  stripSpaces: v => (typeof v === "string" ? v.replace(/\s+/g, "") : v),
-  normalizePhone: v => (typeof v === "string" ? v.replace(/[^\d+]/g, "") : v),
+  employeeId: (value: unknown) => {
+    if (typeof value !== "string" || !value) return value;
+
+    return value
+      .replace(/\s+/g, "")
+      .toLowerCase()
+      .split("")
+      .filter(char => PATTERNS.EMPLOYEE_ID.test(char))
+      .join("");
+  },
 };
 
 const rowHookRegistry: Record<string, RowHook> = {

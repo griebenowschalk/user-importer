@@ -182,8 +182,6 @@ export interface CompiledConfig {
   rowHooks: typeof rowHooks;
   // Performance flags
   hasUniquenessChecks: boolean;
-  hasComplexHooks: boolean;
-  estimatedComplexity: Complexity;
 }
 
 // Pipeline options

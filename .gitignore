@@ -23,3 +23,6 @@ certs
 *.njsproj
 *.sln
 *.sw?
+
+docs/*.xlsx
+docs/*.xls
