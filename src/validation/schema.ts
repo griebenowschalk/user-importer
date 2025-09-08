@@ -17,7 +17,7 @@ export const userSchema = yup.object({
     .string()
     .required("Employee ID is required")
     .matches(
-      /^[a-z0-9-#]+$/,
+      PATTERNS.EMPLOYEE_ID,
       "Employee ID must contain only lowercase letters, numbers, hyphens, and hash symbols"
     )
     .min(1, "Employee ID cannot be empty")
@@ -71,11 +71,12 @@ export const userSchema = yup.object({
   startDate: yup
     .string()
     .required("Start date is required")
-    .matches(/^\d{4}-\d{2}-\d{2}$/, "Start date must be in YYYY-MM-DD format")
+    .matches(PATTERNS.ISO_DATE, "Start date must be in YYYY-MM-DD format")
     .meta({
       type: "date",
       trim: "both",
       regex: PATTERNS.ISO_DATE,
+      columnHookId: "dateFormatting",
       normalize: {
         toISODate: true,
       },
@@ -154,7 +155,7 @@ export const userSchema = yup.object({
     .string()
     .required("Country is required")
     .length(3, "Country must be a 3-letter ISO code")
-    .matches(/^[A-Z]{3}$/, "Country must be a valid 3-letter ISO code")
+    .matches(PATTERNS.ISO_COUNTRY, "Country must be a valid 3-letter ISO code")
     .meta({
       type: "country",
       trim: "both",
@@ -176,14 +177,12 @@ export const userSchema = yup.object({
   dateOfBirth: yup
     .string()
     .required("Date of birth is required")
-    .matches(
-      /^\d{4}-\d{2}-\d{2}$/,
-      "Date of birth must be in YYYY-MM-DD format"
-    )
+    .matches(PATTERNS.ISO_DATE, "Date of birth must be in YYYY-MM-DD format")
     .meta({
       type: "date",
       trim: "both",
       regex: PATTERNS.ISO_DATE,
+      columnHookId: "dateFormatting",
       normalize: {
         toISODate: true,
       },

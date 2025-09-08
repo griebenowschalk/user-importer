@@ -11,6 +11,11 @@ import {
   GroupedFieldChange,
 } from "../types";
 import { Row } from "@tanstack/react-table";
+import {
+  format as formatDateFns,
+  parse as parseDateFns,
+  isValid,
+} from "date-fns";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -63,7 +68,9 @@ export function normalizeBasic(
   rule: CleaningRule,
   field: string
 ): unknown {
-  if (typeof v !== "string" || !v) return v;
+  // Allow numbers for dates (Excel serials). Only return early if truly empty/null.
+  if (v === null || v === undefined) return v;
+  if (typeof v === "string" && v.length === 0) return v;
   if (
     rule?.normalize?.phoneDigitsOnly &&
     (field.includes("phone") || rule.type === "phone")
@@ -73,8 +80,55 @@ export function normalizeBasic(
   if (rule?.normalize?.toISO3 && rule.type === "country") {
     if (typeof v === "string") return v.replace(/\s+/g, "").toUpperCase();
   }
+  if (rule?.normalize?.toISODate && rule.type === "date") {
+    const asString = String(v).trim();
+
+    let date: Date;
+    if (typeof v === "number") {
+      date = excelSerialToDate(v);
+    } else if (/^\d{1,6}$/.test(asString)) {
+      date = excelSerialToDate(Number(asString));
+    } else {
+      // Try a set of common CSV/JSON date formats before falling back
+      const candidateFormats = [
+        "yyyy-MM-dd", // ISO
+        "M/d/yy",
+        "M/d/yyyy",
+        "MM/dd/yyyy",
+        "dd/MM/yyyy",
+        "d/M/yy",
+        "yyyy/MM/dd",
+        "MM-dd-yyyy",
+        "dd-MM-yyyy",
+      ];
+
+      let parsed: Date | null = null;
+      for (const pattern of candidateFormats) {
+        const attempt = parseDateFns(asString, pattern, new Date());
+        if (isValid(attempt)) {
+          parsed = attempt;
+          break;
+        }
+      }
+
+      if (!parsed) {
+        const native = new Date(asString);
+        parsed = isValid(native) ? native : null;
+      }
+      date = parsed ?? new Date(NaN);
+    }
+
+    return formatDateFns(date, "yyyy-MM-dd");
+  }
   return v;
 }
+
+const excelSerialToDate = (dateNumber: number) => {
+  // Excel epoch is 1899-12-30 (accounts for the 1900 leap year bug)
+  const excelEpoch = new Date(1899, 11, 30).getTime();
+  const msPerDay = 24 * 60 * 60 * 1000;
+  return new Date(excelEpoch + dateNumber * msPerDay);
+};
 
 export function groupErrorsByRow(errors: ValidationError[]): GroupedRowError[] {
   const grouped = new Map<number, Map<string, GroupedFieldError>>();
