@@ -54,6 +54,7 @@ function debounceProgress<T extends (...args: any[]) => void>(
 
 function applyHooks(rows: RowData[], plan: CompiledConfig) {
   const changes: CleaningChange[] = [];
+  const errors: ValidationError[] = [];
 
   for (const [index, row] of rows.entries()) {
     //Column hooks
@@ -85,7 +86,17 @@ function applyHooks(rows: RowData[], plan: CompiledConfig) {
         if (!rowFunc) continue;
 
         const before = row;
-        const after = rowFunc(row);
+        const [after, error] = rowFunc(row);
+
+        for (const e of error) {
+          errors.push({
+            row: index,
+            field: e.field as keyof User,
+            message: e.message,
+            value: row,
+          });
+        }
+
         if (after !== before) {
           for (const value in after) {
             if (
@@ -108,7 +119,7 @@ function applyHooks(rows: RowData[], plan: CompiledConfig) {
     }
   }
 
-  return { rows, changes };
+  return { rows, changes, errors };
 }
 
 function batchYup(rows: RowData[], startRow: number) {
@@ -151,6 +162,10 @@ async function validateChunk(rows: RowData[], startRow: number) {
 
   // Offset core and hook indices to global row numbers
   const coreErrors = core.errors.map(e => ({ ...e, row: e.row + startRow }));
+  const hookErrors = withHooks.errors.map(e => ({
+    ...e,
+    row: e.row + startRow,
+  }));
   const coreChanges = core.changes.map(c => ({ ...c, row: c.row + startRow }));
   const hookChanges = withHooks.changes.map(c => ({
     ...c,
@@ -161,7 +176,7 @@ async function validateChunk(rows: RowData[], startRow: number) {
     startRow,
     endRow: startRow + rows.length,
     rows: withHooks.rows,
-    errors: [...coreErrors, ...yupErrors],
+    errors: [...coreErrors, ...yupErrors, ...hookErrors],
     changes: [...hookChanges, ...coreChanges],
   };
 }

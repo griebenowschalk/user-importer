@@ -1,11 +1,15 @@
 import * as yup from "yup";
 import type { CleaningRule, User } from "../types";
+import { customList } from "country-codes-list";
+import { toAlpha3 } from "i18n-iso-countries";
 
 export const PATTERNS = {
   EMPLOYEE_ID: /^[a-z0-9-#]+$/,
   ISO_DATE: /^\d{4}-\d{2}-\d{2}$/,
   ISO_COUNTRY: /^[A-Z]{3}$/,
 } as const;
+
+export const allowedTLDs = [".com", ".co.za", ".gov", ".edu", ".org", ".net"];
 
 const OPTIONS = {
   gender: ["male", "female", "neither"],
@@ -133,6 +137,7 @@ export const userSchema = yup.object({
   workPhoneNumber: yup
     .string()
     .optional()
+    .nullable()
     .meta({
       type: "phone",
       trim: "both",
@@ -159,6 +164,7 @@ export const userSchema = yup.object({
     .meta({
       type: "country",
       trim: "both",
+      options: Object.keys(customList("countryCode")).map(c => toAlpha3(c)),
       regex: PATTERNS.ISO_COUNTRY,
       normalize: {
         toISO3: true,

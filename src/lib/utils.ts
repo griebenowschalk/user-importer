@@ -16,6 +16,9 @@ import {
   parse as parseDateFns,
   isValid,
 } from "date-fns";
+import { CountryProperty, customList } from "country-codes-list";
+import parsePhoneNumber, { CountryCode } from "libphonenumber-js";
+import { toAlpha2 } from "i18n-iso-countries";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -75,7 +78,28 @@ export function normalizeBasic(
     rule?.normalize?.phoneDigitsOnly &&
     (field.includes("phone") || rule.type === "phone")
   ) {
-    if (typeof v === "string") return v.replace(/[^\d+]/g, "");
+    if (typeof v === "number") {
+      v = String(v);
+    }
+    if (typeof v === "string") {
+      let phoneNumber = v || "";
+
+      if (phoneNumber && /^[0]{2}/.test(phoneNumber)) {
+        phoneNumber = `+${v.slice(2, v.length)}`;
+      }
+
+      if (phoneNumber && /^[0]{1}/.test(phoneNumber)) {
+        phoneNumber = `+${v.slice(1, v.length)}`;
+      }
+
+      if (phoneNumber && !/^\+/.test(phoneNumber)) {
+        phoneNumber = `+${phoneNumber}`;
+      }
+
+      return phoneNumber.replace(/[^\d+]/g, "");
+    }
+
+    return v;
   }
   if (rule?.normalize?.toISO3 && rule.type === "country") {
     if (typeof v === "string") return v.replace(/\s+/g, "").toUpperCase();
@@ -224,3 +248,50 @@ export function getGroupedFieldMessages(
     grouped.fields.find(f => f.field === field)?.messages.join("\n ") ?? ""
   );
 }
+
+export const checkValidNumber = (country: string, number: string) => {
+  const countryCodesList = customList(
+    "countryCode" as CountryProperty,
+    "{countryCallingCode}"
+  );
+  const alpha2Code = toAlpha2(country);
+  const callingCode = alpha2Code
+    ? (countryCodesList[alpha2Code as keyof typeof countryCodesList] as string)
+    : "";
+
+  try {
+    const phoneNumber = parsePhoneNumber(number, {
+      defaultCountry: alpha2Code as CountryCode,
+    });
+    return {
+      valid: phoneNumber?.isValid() ?? false,
+      callingCode,
+    };
+  } catch {
+    return { valid: false, callingCode };
+  }
+};
+
+export const numberUpdate = (
+  key: string,
+  number: string,
+  country: string,
+  callingCode: string,
+  cleanUp?: boolean
+) => {
+  let validNumber = false;
+  let newNumber = number;
+  let error = null;
+  if (cleanUp && number) {
+    newNumber = number.startsWith(`+${callingCode}`)
+      ? number
+      : `+${callingCode}${(number as string).slice(1)}`;
+    validNumber = checkValidNumber(country as string, newNumber).valid;
+  }
+
+  if (!validNumber) {
+    error = { field: key, message: "Number does not match the country code" };
+  }
+
+  return { newNumber, error };
+};
