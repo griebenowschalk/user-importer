@@ -282,6 +282,7 @@ export const numberUpdate = (
   let validNumber = false;
   let newNumber = number;
   let error = null;
+  console.log("numberUpdate", key, number, country, callingCode, cleanUp);
   if (cleanUp && number) {
     newNumber = number.startsWith(`+${callingCode}`)
       ? number
@@ -290,7 +291,11 @@ export const numberUpdate = (
   }
 
   if (!validNumber) {
-    error = { field: key, message: "Number does not match the country code" };
+    error = {
+      field: key,
+      message:
+        "Invalid number. The phone number needs to start with + followed by the country code and be the correct length.",
+    };
   }
 
   return { newNumber, error };

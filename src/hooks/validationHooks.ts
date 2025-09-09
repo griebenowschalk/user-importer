@@ -14,6 +14,25 @@ const validateEmail = (
   return { row };
 };
 
+const copyEmptyNumber = (row: RowData) => {
+  let rowUpdate = row;
+  const updatedMobileNumber = rowUpdate?.mobileNumber;
+  if (
+    !row.workPhoneNumber &&
+    checkValidNumber(
+      row.country as string,
+      (updatedMobileNumber as string) || (row.mobileNumber as string)
+    ).valid
+  ) {
+    rowUpdate = {
+      ...rowUpdate,
+      workPhoneNumber: String(updatedMobileNumber || row.mobileNumber),
+    };
+  }
+
+  return { row: rowUpdate };
+};
+
 const validatePhoneNumber = (
   row: RowData
 ): { row: RowData; errors?: { field: string; message: string }[] } => {
@@ -98,6 +117,12 @@ const rowHookRegistry: Record<string, RowHook> = {
       if (error) {
         errors.push(error);
       }
+    }
+
+    // Copy empty number
+    if (updatedRow?.mobileNumber) {
+      const { row: newRow } = copyEmptyNumber(updatedRow);
+      updatedRow = newRow;
     }
 
     return [updatedRow, errors];

@@ -335,7 +335,7 @@ export default function DataPreview({
                                     </span>
                                   </TooltipTrigger>
                                   {isChange || isError ? (
-                                    <TooltipContent className="whitespace-pre-line">
+                                    <TooltipContent className="whitespace-pre-line max-w-[300px]">
                                       {isError
                                         ? getGroupedFieldMessages(
                                             isError,
