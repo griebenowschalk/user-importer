@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
   flexRender,
+  RowData,
   ColumnDef,
+  type CellContext,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -18,7 +20,10 @@ import {
 import { Typography } from "./ui/typography";
 import { Button } from "./ui/button";
 import { Container } from "./ui/container";
-import { validateRowsOptimized } from "../lib/validationClient";
+import {
+  validateRowsOptimized,
+  validateChunkOptimized,
+} from "../lib/validationClient";
 import { Progress } from "./ui/progress";
 import {
   Tooltip,
@@ -30,6 +35,8 @@ import {
   getGroupedFieldChange,
   getGroupedFieldError,
   getGroupedFieldMessages,
+  groupErrorsByRow,
+  groupChangesByRow,
 } from "../lib/utils";
 
 interface DataPreviewProps {
@@ -37,6 +44,59 @@ interface DataPreviewProps {
   mappings: Record<string, keyof User>;
   onNext: (validatedData: { valid: any[]; errors: ValidationError[] }) => void;
   onBack: () => void;
+}
+
+declare module "@tanstack/react-table" {
+  interface TableMeta<TData extends RowData> {
+    updateData: (rowIndex: number, columnId: string, value: unknown) => void;
+    // Reference generic to satisfy no-unused-vars
+    __rowType__?: TData;
+  }
+}
+
+function EditableCell(ctx: CellContext<Record<string, unknown>, unknown>) {
+  const { getValue, row, column, table } = ctx;
+  const { index } = row;
+  const { id } = column;
+  const initialValue = getValue();
+  const [value, setValue] = useState(initialValue);
+
+  const onBlur = () => {
+    table.options.meta?.updateData(index, id, value);
+  };
+
+  useEffect(() => {
+    setValue(initialValue);
+  }, [initialValue]);
+
+  return (
+    <input
+      className="w-full h-full bg-transparent border-none outline-none"
+      value={value as string}
+      onChange={e => setValue(e.target.value)}
+      onBlur={onBlur}
+    />
+  );
+}
+
+const defaultColumn: Partial<ColumnDef<Record<string, unknown>>> = {
+  cell: EditableCell,
+};
+
+function useSkipper() {
+  const shouldSkipRef = useRef(true);
+  const shouldSkip = shouldSkipRef.current;
+
+  // Wrap a function with this to skip a pagination reset temporarily
+  const skip = useCallback(() => {
+    shouldSkipRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    shouldSkipRef.current = true;
+  });
+
+  return [shouldSkip, skip] as const;
 }
 
 export default function DataPreview({
@@ -49,6 +109,7 @@ export default function DataPreview({
   const [groupedErrors, setGroupedErrors] = useState<GroupedRowError[] | null>(
     null
   );
+  const [autoResetPageIndex, skipAutoResetPageIndex] = useSkipper();
   const [groupedChanges, setGroupedChanges] = useState<
     GroupedRowChange[] | null
   >(null);
@@ -71,19 +132,11 @@ export default function DataPreview({
         id: sourceHeader,
         header: mapped ? mapped : sourceHeader,
         accessorKey: sourceHeader,
-        cell: info => {
-          const value = info.getValue() as unknown;
-          if (value === null || value === undefined) return "";
-          if (typeof value === "object") return JSON.stringify(value);
-          return String(value);
-        },
       } as ColumnDef<Record<string, unknown>>;
     });
 
     return [numberCol, ...dataCols];
   }, [fileData?.headers, mappings]);
-
-  // const [isEditing, setIsEditing] = useState(false);
 
   // keep local rows in sync when file changes
   useEffect(() => {
@@ -130,7 +183,79 @@ export default function DataPreview({
   const table = useReactTable({
     data,
     columns,
+    defaultColumn,
     getCoreRowModel: getCoreRowModel(),
+    autoResetPageIndex,
+    meta: {
+      updateData: (rowIndex, columnId, value) => {
+        // Skip page index reset until after next rerender
+        skipAutoResetPageIndex();
+        setRows(old => {
+          if (!old || !old.rows) return old;
+
+          // Map visible rowIndex to actual global row when filtering errors
+          const actualRowIndex = showErrors
+            ? (groupedErrors?.[rowIndex]?.row ?? rowIndex)
+            : rowIndex;
+
+          const updatedRows = old.rows.map((row, index) => {
+            if (index === actualRowIndex) {
+              return {
+                ...row,
+                [columnId]: value,
+              };
+            }
+            return row;
+          });
+
+          // Optimistically update while we validate the single row
+          queueMicrotask(async () => {
+            try {
+              const chunk = await validateChunkOptimized(
+                [updatedRows[actualRowIndex]!],
+                actualRowIndex
+              );
+
+              // Merge validation results for this single row
+              setRows(current => {
+                if (!current) return current;
+
+                const mergedRows = current.rows.slice();
+                mergedRows[actualRowIndex] = chunk.rows[0]!;
+
+                // Replace errors and changes for this row index only
+                const otherErrors = (current.errors ?? []).filter(
+                  e => e.row !== actualRowIndex
+                );
+                const otherChanges = (current.changes ?? []).filter(
+                  c => c.row !== actualRowIndex
+                );
+
+                const newErrors = otherErrors.concat(chunk.errors);
+                const newChanges = otherChanges.concat(chunk.changes);
+
+                // Update grouped derived state synchronously with rows/errors/changes
+                setGroupedErrors(groupErrorsByRow(newErrors));
+                setGroupedChanges(groupChangesByRow(newChanges));
+
+                return {
+                  rows: mergedRows,
+                  errors: newErrors,
+                  changes: newChanges,
+                };
+              });
+            } catch (err) {
+              console.error("Single-row validation failed", err);
+            }
+          });
+
+          return {
+            ...old,
+            rows: updatedRows,
+          };
+        });
+      },
+    },
   });
 
   const parentRef = useRef<HTMLDivElement | null>(null);
@@ -171,12 +296,6 @@ export default function DataPreview({
         <Typography as="h2">Preview & Validate</Typography>
         <Typography as="p">Review your data before importing</Typography>
         <div className="mt-2 flex items-center gap-2">
-          {/* <Button
-          variant={isEditing ? "default" : "secondary"}
-          onClick={() => setIsEditing(v => !v)}
-        >
-          {isEditing ? "Disable editing" : "Enable editing"}
-        </Button> */}
           <Button
             variant={!showErrors ? "default" : "secondary"}
             onClick={() => setShowErrors(false)}
@@ -287,36 +406,6 @@ export default function DataPreview({
                               ${!isRowNumber && isError ? "bg-red-100" : ""} 
                               ${index !== columns.length - 1 ? "border-r" : ""}`}
                             >
-                              {/* {isEditing ? (
-                            <input
-                              className="w-full truncate bg-transparent outline-none"
-                              value={
-                                (rows?.rows[row.index]?.[
-                                  cell.column.id as string
-                                ] as string | number | undefined) ?? ""
-                              }
-                              onChange={e => {
-                                const value = e.target.value;
-                                setRows(prev => {
-                                  const next = [...(prev?.rows ?? [])];
-                                  const current = {
-                                    ...(next[row.index] ?? {}),
-                                  };
-                                  current[cell.column.id as string] = value;
-                                  next[row.index] = current;
-
-                                  return {
-                                    ...prev,
-                                    rows: next,
-                                    errors: prev?.errors ?? [],
-                                    changes: prev?.changes ?? [],
-                                  };
-                                });
-                              }}
-                            />
-                          ) : (
-                            
-                          )} */}
                               {isRowNumber ? (
                                 <span className="block w-full truncate align-middle">
                                   {flexRender(

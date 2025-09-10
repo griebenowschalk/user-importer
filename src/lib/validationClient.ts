@@ -39,3 +39,11 @@ export async function validateRowsOptimized(
   await remote.validateInit(mapping);
   return remote.validateAll(rows, onProgress ? proxy(onProgress) : undefined);
 }
+
+export async function validateChunkOptimized(
+  rows: RowData[],
+  startRow: number
+) {
+  const remote = await getRemote();
+  return remote.validateChunk(rows, startRow);
+}

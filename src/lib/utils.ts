@@ -282,7 +282,6 @@ export const numberUpdate = (
   let validNumber = false;
   let newNumber = number;
   let error = null;
-  console.log("numberUpdate", key, number, country, callingCode, cleanUp);
   if (cleanUp && number) {
     newNumber = number.startsWith(`+${callingCode}`)
       ? number
