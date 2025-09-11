@@ -7,6 +7,7 @@ import {
   ColumnDef,
   type CellContext,
 } from "@tanstack/react-table";
+import { extractCleaningRules, userSchema } from "../validation/schema";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   FileParseResult,
@@ -59,29 +60,74 @@ function EditableCell(ctx: CellContext<Record<string, unknown>, unknown>) {
   const { index } = row;
   const { id } = column;
   const initialValue = getValue();
-  const [value, setValue] = useState(initialValue);
+  const [value, setValue] = useState<string>(
+    () => ((initialValue as string | number | null | undefined) ?? "") as string
+  );
 
   const onBlur = () => {
-    table.options.meta?.updateData(index, id, value);
+    if (value !== initialValue) {
+      table.options.meta?.updateData(index, id, value);
+    }
   };
 
   useEffect(() => {
-    setValue(initialValue);
+    setValue((((initialValue as any) ?? "") as string) ?? "");
   }, [initialValue]);
 
   return (
     <input
       className="w-full h-full bg-transparent border-none outline-none"
-      value={value as string}
-      onChange={e => setValue(e.target.value)}
+      value={(value as string) ?? ""}
+      onChange={e => {
+        if (e.target.value !== value) {
+          setValue(e.target.value ?? "");
+        }
+      }}
       onBlur={onBlur}
     />
   );
 }
 
-const defaultColumn: Partial<ColumnDef<Record<string, unknown>>> = {
-  cell: EditableCell,
-};
+function EditableSelect({
+  ctx,
+  options,
+}: {
+  ctx: CellContext<Record<string, unknown>, unknown>;
+  options: string[];
+}) {
+  const { row, column, table } = ctx;
+  const { index } = row;
+  const { id } = column;
+  const getValue = ctx.getValue as () => unknown;
+  const initialValue = getValue();
+  const [value, setValue] = useState(initialValue ?? "");
+
+  useEffect(() => {
+    setValue(initialValue ?? "");
+  }, [initialValue]);
+
+  const onChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const v = e.target.value;
+    if (v !== value) {
+      setValue(v);
+      table.options.meta?.updateData(index, id, v);
+    }
+  };
+
+  return (
+    <select
+      className="w-full h-full bg-transparent border-none outline-none"
+      value={(value as string) ?? ""}
+      onChange={onChange}
+    >
+      {options.map(opt => (
+        <option key={opt} value={opt}>
+          {opt}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 function useSkipper() {
   const shouldSkipRef = useRef(true);
@@ -119,6 +165,7 @@ export default function DataPreview({
 
   const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(() => {
     const headers = fileData?.headers ?? [];
+    const rules = extractCleaningRules(userSchema as any);
 
     const numberCol: ColumnDef<Record<string, unknown>> = {
       id: "_row",
@@ -128,10 +175,20 @@ export default function DataPreview({
 
     const dataCols = headers.map(sourceHeader => {
       const mapped = mappings?.[sourceHeader];
+      const rule = mapped ? (rules as any)[mapped] : undefined;
+      const hasOptions = !!rule?.options;
+      const options: string[] = hasOptions
+        ? Object.values(rule.options ?? {}).map(o => String(o))
+        : [];
       return {
         id: sourceHeader,
         header: mapped ? mapped : sourceHeader,
         accessorKey: sourceHeader,
+        cell: hasOptions
+          ? (ctx: CellContext<Record<string, unknown>, unknown>) => (
+              <EditableSelect ctx={ctx} options={options} />
+            )
+          : EditableCell,
       } as ColumnDef<Record<string, unknown>>;
     });
 
@@ -183,7 +240,6 @@ export default function DataPreview({
   const table = useReactTable({
     data,
     columns,
-    defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     autoResetPageIndex,
     meta: {
@@ -236,7 +292,10 @@ export default function DataPreview({
 
                 // Update grouped derived state synchronously with rows/errors/changes
                 setGroupedErrors(groupErrorsByRow(newErrors));
-                setGroupedChanges(groupChangesByRow(newChanges));
+                setGroupedChanges(prev => [
+                  ...(prev ?? []),
+                  ...groupChangesByRow(newChanges),
+                ]);
 
                 return {
                   rows: mergedRows,
@@ -308,7 +367,7 @@ export default function DataPreview({
             onClick={() => setShowErrors(true)}
             disabled={!validationProgress?.isComplete}
           >
-            Errors Only
+            {`Errors Only (${groupedErrors?.length ?? 0})`}
           </Button>
         </div>
         {!validationProgress?.isComplete ? (

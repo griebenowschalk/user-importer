@@ -109,7 +109,7 @@ function applyHooks(rows: RowData[], plan: CompiledConfig) {
                 originalValue: before[value],
                 cleanedValue: after[value],
                 changeType: [CleaningChangeType.rowHook],
-                description: `Row hook ${plan.rowHooks?.onEntryInitHookId} applied to row ${index}`,
+                description: `Row hook ${plan.rowHooks?.onEntryInitHookId} applied`,
               });
             }
           }
