@@ -84,7 +84,8 @@ export type ColumnHook = (
   context: { field: string; row: RowData }
 ) => unknown;
 export type RowHook = (
-  row: RowData
+  row: RowData,
+  cleanUp?: boolean
 ) => [RowData, { field: string; message: string }[]];
 
 export interface CleaningRule {

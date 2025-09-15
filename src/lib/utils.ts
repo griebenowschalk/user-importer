@@ -263,8 +263,14 @@ export const checkValidNumber = (country: string, number: string) => {
     const phoneNumber = parsePhoneNumber(number, {
       defaultCountry: alpha2Code as CountryCode,
     });
+
+    const detectedCallingCode = phoneNumber?.countryCallingCode ?? null;
+    const isMismatch = Boolean(
+      detectedCallingCode && callingCode && detectedCallingCode !== callingCode
+    );
+
     return {
-      valid: phoneNumber?.isValid() ?? false,
+      valid: (phoneNumber?.isValid() ?? false) && !isMismatch,
       callingCode,
     };
   } catch {
@@ -293,7 +299,9 @@ export const numberUpdate = (
     error = {
       field: key,
       message:
-        "Invalid number. The phone number needs to start with + followed by the country code and be the correct length.",
+        "Invalid number. The phone number needs to start with + followed by the country code and be the correct length. " +
+        "In this case the country code is " +
+        callingCode,
     };
   }
 

@@ -39,6 +39,8 @@ import {
   groupErrorsByRow,
   groupChangesByRow,
 } from "../lib/utils";
+import { FileSearchIcon, DownloadIcon, InfoIcon } from "lucide-react";
+import { fields } from "../localisation/fields";
 
 interface DataPreviewProps {
   fileData: FileParseResult;
@@ -110,16 +112,24 @@ function EditableSelect({
     const v = e.target.value;
     if (v !== value) {
       setValue(v);
-      table.options.meta?.updateData(index, id, v);
+      const normalized = v === "" ? undefined : v;
+      table.options.meta?.updateData(index, id, normalized);
     }
   };
+
+  const stringValue = (value as string) ?? "";
 
   return (
     <select
       className="w-full h-full bg-transparent border-none outline-none"
-      value={(value as string) ?? ""}
+      value={stringValue}
       onChange={onChange}
     >
+      {/* Render a hidden placeholder only when value is empty, so blank shows without an empty option in the list */}
+      {stringValue === "" && <option value="" hidden />}
+      {stringValue !== "" && !options.find(opt => opt === stringValue) && (
+        <option value={stringValue} hidden />
+      )}
       {options.map(opt => (
         <option key={opt} value={opt}>
           {opt}
@@ -152,6 +162,7 @@ export default function DataPreview({
   onBack,
 }: DataPreviewProps) {
   const [showErrors, setShowErrors] = useState(false);
+  // const [findErrors, setFindErrors] = useState(null);
   const [groupedErrors, setGroupedErrors] = useState<GroupedRowError[] | null>(
     null
   );
@@ -170,7 +181,13 @@ export default function DataPreview({
     const numberCol: ColumnDef<Record<string, unknown>> = {
       id: "_row",
       header: "#",
-      cell: info => String(info.row.index + 1),
+      cell: info => {
+        const displayIndex = info.row.index;
+        const originalRow = showErrors
+          ? (groupedErrors?.[displayIndex]?.row ?? displayIndex)
+          : displayIndex;
+        return String(originalRow + 1);
+      },
     };
 
     const dataCols = headers.map(sourceHeader => {
@@ -265,8 +282,9 @@ export default function DataPreview({
           });
 
           // Optimistically update while we validate the single row
-          queueMicrotask(async () => {
+          (async () => {
             try {
+              console.log("validating row", actualRowIndex);
               const chunk = await validateChunkOptimized(
                 [updatedRows[actualRowIndex]!],
                 actualRowIndex
@@ -306,7 +324,7 @@ export default function DataPreview({
             } catch (err) {
               console.error("Single-row validation failed", err);
             }
-          });
+          })();
 
           return {
             ...old,
@@ -354,21 +372,40 @@ export default function DataPreview({
       <Container className="data-preview">
         <Typography as="h2">Preview & Validate</Typography>
         <Typography as="p">Review your data before importing</Typography>
-        <div className="mt-2 flex items-center gap-2">
-          <Button
-            variant={!showErrors ? "default" : "secondary"}
-            onClick={() => setShowErrors(false)}
-            disabled={!validationProgress?.isComplete}
-          >
-            All Rows
-          </Button>
-          <Button
-            variant={showErrors ? "destructive" : "secondary"}
-            onClick={() => setShowErrors(true)}
-            disabled={!validationProgress?.isComplete}
-          >
-            {`Errors Only (${groupedErrors?.length ?? 0})`}
-          </Button>
+        <div className="mt-2 flex flex-row justify-between">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {}}
+              disabled={
+                !validationProgress?.isComplete || !groupedErrors?.length
+              }
+            >
+              Find Errors
+            </Button>
+            <Button
+              variant={!showErrors ? "default" : "secondary"}
+              onClick={() => setShowErrors(false)}
+              disabled={!validationProgress?.isComplete}
+            >
+              All Rows
+            </Button>
+            <Button
+              variant={showErrors ? "destructive" : "secondary"}
+              onClick={() => setShowErrors(true)}
+              disabled={!validationProgress?.isComplete}
+            >
+              {`Errors Only (${groupedErrors?.length ?? 0})`}
+            </Button>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => {}}>
+              <FileSearchIcon />
+            </Button>
+            <Button variant="outline" onClick={() => {}}>
+              <DownloadIcon />
+            </Button>
+          </div>
         </div>
         {!validationProgress?.isComplete ? (
           <Progress
@@ -397,13 +434,27 @@ export default function DataPreview({
                                 : ""
                             }`}
                           >
-                            <span className="block w-full truncate">
+                            <span className="block w-full truncate flex items-center gap-2">
                               {header.isPlaceholder
                                 ? null
                                 : flexRender(
                                     header.column.columnDef.header,
                                     header.getContext()
                                   )}
+                              {header.column.columnDef.header !== "#" && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <InfoIcon className="w-4 h-4" />
+                                  </TooltipTrigger>
+                                  <TooltipContent className="whitespace-pre-line max-w-[300px]">
+                                    {
+                                      fields[
+                                        `${header.column.columnDef.header}_description` as keyof typeof fields
+                                      ]
+                                    }
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
                             </span>
                           </th>
                         );

@@ -8,7 +8,15 @@ const validateEmail = (
   const domain = (row?.email as string)?.split("@")[1] ?? "";
 
   if (!allowedTLDs.some(tld => domain.includes(tld))) {
-    return { row, error: { field: "email", message: "Invalid email domain" } };
+    return {
+      row,
+      error: {
+        field: "email",
+        message:
+          "Invalid email domain. Only the following domains are allowed: " +
+          allowedTLDs.join(", "),
+      },
+    };
   }
 
   return { row };
@@ -34,7 +42,8 @@ const copyEmptyNumber = (row: RowData) => {
 };
 
 const validatePhoneNumber = (
-  row: RowData
+  row: RowData,
+  cleanUp?: boolean
 ): { row: RowData; errors?: { field: string; message: string }[] } => {
   let rowUpdate = row;
   let errors = [];
@@ -52,16 +61,22 @@ const validatePhoneNumber = (
       true
     );
 
-    rowUpdate = {
-      ...rowUpdate,
-      workPhoneNumber: newNumber,
-    };
+    if (cleanUp) {
+      rowUpdate = {
+        ...rowUpdate,
+        workPhoneNumber: newNumber,
+      };
+    }
+
     if (error) {
       errors.push(error);
     }
   }
 
-  if (row.mobileNumber && !valid) {
+  if (
+    row.mobileNumber &&
+    !checkValidNumber(row.country as string, row.mobileNumber as string).valid
+  ) {
     const { newNumber, error } = numberUpdate(
       "mobileNumber",
       row.mobileNumber as string,
@@ -70,10 +85,13 @@ const validatePhoneNumber = (
       true
     );
 
-    rowUpdate = {
-      ...rowUpdate,
-      mobileNumber: newNumber,
-    };
+    if (cleanUp) {
+      rowUpdate = {
+        ...rowUpdate,
+        mobileNumber: newNumber,
+      };
+    }
+
     if (error) {
       errors.push(error);
     }
@@ -96,14 +114,17 @@ const columnHookRegistry: Record<string, ColumnHook> = {
 };
 
 const rowHookRegistry: Record<string, RowHook> = {
-  onEntryInit: row => {
+  onEntryInit: (row, cleanUp) => {
     let updatedRow = row;
     let errors: { field: string; message: string }[] = [];
 
     // Phone number validation
     if (updatedRow?.mobileNumber) {
-      const { row: newRow, errors: phoneErrors } =
-        validatePhoneNumber(updatedRow);
+      const { row: newRow, errors: phoneErrors } = validatePhoneNumber(
+        updatedRow,
+        cleanUp
+      );
+      console.log("phoneErrors", phoneErrors);
       updatedRow = newRow;
       if (phoneErrors) {
         errors.push(...phoneErrors);

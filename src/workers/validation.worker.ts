@@ -18,6 +18,7 @@ import {
 import { compileConfig, validationCore } from "../validation/engine";
 import { groupChangesByRow, groupErrorsByRow } from "../lib/utils";
 import { ObjectSchema } from "yup";
+import { changes as stringChanges } from "../localisation/changes";
 
 let PLAN: CompiledConfig | null = null;
 
@@ -52,7 +53,7 @@ function debounceProgress<T extends (...args: any[]) => void>(
   }) as T;
 }
 
-function applyHooks(rows: RowData[], plan: CompiledConfig) {
+function applyHooks(rows: RowData[], plan: CompiledConfig, cleanUp?: boolean) {
   const changes: CleaningChange[] = [];
   const errors: ValidationError[] = [];
 
@@ -80,13 +81,14 @@ function applyHooks(rows: RowData[], plan: CompiledConfig) {
         }
       }
 
+      console.log("row hooks", rows);
       //Row hooks
       if (plan.rowHooks?.onEntryInitHookId) {
         const rowFunc = rowHookRegistry[plan.rowHooks?.onEntryInitHookId];
         if (!rowFunc) continue;
 
         const before = row;
-        const [after, error] = rowFunc(row);
+        const [after, error] = rowFunc(row, cleanUp);
 
         for (const e of error) {
           errors.push({
@@ -103,13 +105,14 @@ function applyHooks(rows: RowData[], plan: CompiledConfig) {
               after[value] !== before[value] &&
               changes.length < CHANGE_CAP_PER_CHUNK
             ) {
+              console.log("value", value);
               changes.push({
                 row: index,
                 field: value as keyof User,
                 originalValue: before[value],
                 cleanedValue: after[value],
                 changeType: [CleaningChangeType.rowHook],
-                description: `Row hook ${plan.rowHooks?.onEntryInitHookId} applied`,
+                description: `Row hook ${stringChanges.rowHook[value as keyof typeof stringChanges.rowHook]} applied`,
               });
             }
           }
@@ -155,10 +158,14 @@ async function validateChunk(rows: RowData[], startRow: number) {
   const core = validationCore(rows, PLAN);
 
   // hooks (column/row)
-  const withHooks = applyHooks(core.rows, PLAN);
+  const withHooks = applyHooks(core.rows, PLAN, rows.length > 1);
 
   // yup
   const yupErrors = batchYup(withHooks.rows, startRow);
+
+  // console.log("coreErrors", core.errors);
+  // console.log("withHooks.errors", withHooks.errors);
+  // console.log("yupErrors", yupErrors);
 
   // Offset core and hook indices to global row numbers
   const coreErrors = core.errors.map(e => ({ ...e, row: e.row + startRow }));
