@@ -5,7 +5,7 @@ export const changes = {
   customHook: "Custom hook applied",
   rowHook: {
     phoneNumber: "Phone number cleaned up",
+    workPhoneNumber: "Phone number cleaned up",
     email: "Email cleaned up",
-    copyEmptyNumber: "Empty number copied",
   },
 };

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -41,6 +41,10 @@ import {
 } from "../lib/utils";
 import { FileSearchIcon, DownloadIcon, InfoIcon } from "lucide-react";
 import { fields } from "../localisation/fields";
+import EditableSelect from "./ui/editableSelect";
+import EditableCell from "./ui/editableCell";
+import useSkipper from "../hooks/useSkipper";
+import useFindError from "../hooks/useFindError";
 
 interface DataPreviewProps {
   fileData: FileParseResult;
@@ -49,110 +53,18 @@ interface DataPreviewProps {
   onBack: () => void;
 }
 
+type HighlightCell = {
+  rowIndex: number;
+  colId: string;
+};
+
 declare module "@tanstack/react-table" {
   interface TableMeta<TData extends RowData> {
     updateData: (rowIndex: number, columnId: string, value: unknown) => void;
     // Reference generic to satisfy no-unused-vars
     __rowType__?: TData;
+    setFocusedCell?: (rowIndex: number, columnId: string | null) => void;
   }
-}
-
-function EditableCell(ctx: CellContext<Record<string, unknown>, unknown>) {
-  const { getValue, row, column, table } = ctx;
-  const { index } = row;
-  const { id } = column;
-  const initialValue = getValue();
-  const [value, setValue] = useState<string>(
-    () => ((initialValue as string | number | null | undefined) ?? "") as string
-  );
-
-  const onBlur = () => {
-    if (value !== initialValue) {
-      table.options.meta?.updateData(index, id, value);
-    }
-  };
-
-  useEffect(() => {
-    setValue((((initialValue as any) ?? "") as string) ?? "");
-  }, [initialValue]);
-
-  return (
-    <input
-      className="w-full h-full bg-transparent border-none outline-none"
-      value={(value as string) ?? ""}
-      onChange={e => {
-        if (e.target.value !== value) {
-          setValue(e.target.value ?? "");
-        }
-      }}
-      onBlur={onBlur}
-    />
-  );
-}
-
-function EditableSelect({
-  ctx,
-  options,
-}: {
-  ctx: CellContext<Record<string, unknown>, unknown>;
-  options: string[];
-}) {
-  const { row, column, table } = ctx;
-  const { index } = row;
-  const { id } = column;
-  const getValue = ctx.getValue as () => unknown;
-  const initialValue = getValue();
-  const [value, setValue] = useState(initialValue ?? "");
-
-  useEffect(() => {
-    setValue(initialValue ?? "");
-  }, [initialValue]);
-
-  const onChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const v = e.target.value;
-    if (v !== value) {
-      setValue(v);
-      const normalized = v === "" ? undefined : v;
-      table.options.meta?.updateData(index, id, normalized);
-    }
-  };
-
-  const stringValue = (value as string) ?? "";
-
-  return (
-    <select
-      className="w-full h-full bg-transparent border-none outline-none"
-      value={stringValue}
-      onChange={onChange}
-    >
-      {/* Render a hidden placeholder only when value is empty, so blank shows without an empty option in the list */}
-      {stringValue === "" && <option value="" hidden />}
-      {stringValue !== "" && !options.find(opt => opt === stringValue) && (
-        <option value={stringValue} hidden />
-      )}
-      {options.map(opt => (
-        <option key={opt} value={opt}>
-          {opt}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-function useSkipper() {
-  const shouldSkipRef = useRef(true);
-  const shouldSkip = shouldSkipRef.current;
-
-  // Wrap a function with this to skip a pagination reset temporarily
-  const skip = useCallback(() => {
-    shouldSkipRef.current = false;
-  }, []);
-
-  useEffect(() => {
-    shouldSkipRef.current = true;
-  });
-
-  return [shouldSkip, skip] as const;
 }
 
 export default function DataPreview({
@@ -162,7 +74,6 @@ export default function DataPreview({
   onBack,
 }: DataPreviewProps) {
   const [showErrors, setShowErrors] = useState(false);
-  // const [findErrors, setFindErrors] = useState(null);
   const [groupedErrors, setGroupedErrors] = useState<GroupedRowError[] | null>(
     null
   );
@@ -173,6 +84,9 @@ export default function DataPreview({
   const [rows, setRows] = useState<CleaningResult | null>(null);
   const [validationProgress, setValidationProgress] =
     useState<ValidationProgress | null>(null);
+  // Error navigation state/refs
+  const cellRefs = useRef<Map<string, HTMLTableCellElement>>(new Map());
+  const [focusedCell, setFocusedCell] = useState<HighlightCell | null>(null);
 
   const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(() => {
     const headers = fileData?.headers ?? [];
@@ -210,7 +124,7 @@ export default function DataPreview({
     });
 
     return [numberCol, ...dataCols];
-  }, [fileData?.headers, mappings]);
+  }, [fileData?.headers, mappings, showErrors, groupedErrors]);
 
   // keep local rows in sync when file changes
   useEffect(() => {
@@ -332,6 +246,17 @@ export default function DataPreview({
           };
         });
       },
+      // Track which cell is currently focused for visual outline
+      setFocusedCell: (rowIndex, columnId) => {
+        if (rowIndex < 0 || !columnId) {
+          setFocusedCell(null);
+          return;
+        }
+        const visibleRowIndex = showErrors
+          ? groupedErrors!.findIndex(g => g.row === rowIndex)
+          : rowIndex;
+        setFocusedCell({ rowIndex: visibleRowIndex, colId: columnId });
+      },
     },
   });
 
@@ -344,6 +269,29 @@ export default function DataPreview({
   });
 
   const virtualItems = rowVirtualizer.getVirtualItems();
+
+  const {
+    currentErrorIndex,
+    setCurrentErrorIndex,
+    focusError,
+    errorTargetList,
+  } = useFindError({
+    groupedErrors: groupedErrors ?? [],
+    columns,
+    mappings,
+    rowVirtualizer,
+    showErrors,
+    cellRefs: cellRefs.current,
+    setFocusedCell: (focusedCell: {
+      rowIndex: number;
+      columnId: string | null;
+    }) => {
+      setFocusedCell({
+        rowIndex: focusedCell.rowIndex,
+        colId: focusedCell.columnId ?? "",
+      });
+    },
+  });
 
   // fixed column widths based on content type
   const getColumnWidth = (header: string) => {
@@ -376,7 +324,13 @@ export default function DataPreview({
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
-              onClick={() => {}}
+              onClick={() => {
+                if (!errorTargetList.length) return;
+                const target = errorTargetList[currentErrorIndex]!;
+                focusError(target);
+                const next = (currentErrorIndex + 1) % errorTargetList.length;
+                setCurrentErrorIndex(next);
+              }}
               disabled={
                 !validationProgress?.isComplete || !groupedErrors?.length
               }
@@ -506,6 +460,12 @@ export default function DataPreview({
                           return (
                             <td
                               key={cell.id}
+                              ref={el => {
+                                if (!el) return;
+                                if (cell.column.id === "_row") return;
+                                const key = `${row.index}:${cell.column.id}`;
+                                cellRefs.current.set(key, el);
+                              }}
                               style={{
                                 width: `${w}px`,
                                 minWidth: `${w}px`,
@@ -514,7 +474,19 @@ export default function DataPreview({
                               className={`px-3 py-2 border-b border-gray-300 text-left whitespace-nowrap overflow-hidden 
                               ${!isRowNumber && isChange && !isError ? "bg-blue-100" : ""} 
                               ${!isRowNumber && isError ? "bg-red-100" : ""} 
-                              ${index !== columns.length - 1 ? "border-r" : ""}`}
+                              ${index !== columns.length - 1 ? "border-r" : ""}
+                              ${
+                                focusedCell &&
+                                focusedCell.rowIndex === row.index &&
+                                focusedCell.colId === cell.column.id
+                                  ? isError
+                                    ? "outline outline-1 outline-red-500"
+                                    : isChange
+                                      ? "outline outline-1 outline-blue-500"
+                                      : "outline outline-1 outline-black"
+                                  : ""
+                              }
+                              `}
                             >
                               {isRowNumber ? (
                                 <span className="block w-full truncate align-middle">
@@ -526,7 +498,23 @@ export default function DataPreview({
                               ) : (
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <span className="block w-full truncate align-middle">
+                                    {/* Wrapper span receives focus when inner input/select cannot */}
+                                    <span
+                                      className="block w-full truncate align-middle"
+                                      tabIndex={-1}
+                                      onFocus={() =>
+                                        table.options.meta?.setFocusedCell?.(
+                                          row.index,
+                                          cell.column.id
+                                        )
+                                      }
+                                      onBlur={() =>
+                                        table.options.meta?.setFocusedCell?.(
+                                          -1,
+                                          null
+                                        )
+                                      }
+                                    >
                                       {flexRender(
                                         cell.column.columnDef.cell,
                                         cell.getContext()

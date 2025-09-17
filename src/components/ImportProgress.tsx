@@ -1,23 +1,31 @@
-import { ValidationError, ImportResult } from "@/types";
+import { ValidationError } from "@/types";
+import { useEffect } from "react";
+import { Button } from "./ui/button";
 
 interface ImportProgressProps {
   data: { valid: any[]; errors: ValidationError[] };
-  progress: ImportResult | null;
-  onProgressChange: (progress: ImportResult) => void;
   onBack: () => void;
 }
 
 export default function ImportProgress({
-  data: _data,
-  progress: _progress,
-  onProgressChange: _onProgressChange,
+  data,
   onBack: _onBack,
 }: ImportProgressProps) {
+  useEffect(() => {
+    data.valid.forEach((row: any) => {
+      if (!row.email) delete row.email;
+    });
+  }, [data]);
+
   return (
     <div className="import-progress">
-      <h2>Import Progress</h2>
-      <p>Importing your data...</p>
-      {/* Import progress implementation will go here */}
+      <h2>Data Clean & Validated</h2>
+      <p>Cleaned & validated {data.valid.length} rows</p>
+      <p>Found {data.errors.length} errors</p>
+      <pre className="bg-gray-100 p-2 rounded text-xs overflow-x-auto">
+        {JSON.stringify(data.valid, null, 2)}
+      </pre>
+      <Button onClick={_onBack}>Back</Button>
     </div>
   );
 }

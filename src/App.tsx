@@ -12,14 +12,8 @@ const SheetSelection = lazy(() => import("./components/SheetSelection"));
 
 function App() {
   const [state, send] = useMachine(importerMachine);
-  const {
-    fileData,
-    headerMappings,
-    validatedData,
-    importProgress,
-    file,
-    sheetNames,
-  } = state.context;
+  const { fileData, headerMappings, validatedData, file, sheetNames } =
+    state.context;
 
   return (
     <div className="app">
@@ -89,10 +83,6 @@ function App() {
           <Suspense fallback={<div>Loading...</div>}>
             <ImportProgress
               data={validatedData}
-              progress={importProgress}
-              onProgressChange={importProgress =>
-                send({ type: "PROGRESS", data: importProgress })
-              }
               onBack={() => send({ type: "BACK" })}
             />
           </Suspense>
