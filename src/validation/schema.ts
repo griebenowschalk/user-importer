@@ -26,13 +26,15 @@ export const userSchema = yup.object({
     )
     .min(1, "Employee ID cannot be empty")
     .meta({
-      type: "string",
+      type: "id",
       trim: "both",
       case: "lower",
       regex: PATTERNS.EMPLOYEE_ID,
-      columnHookId: "employeeId",
       unique: {
         ignoreCase: true,
+      },
+      normalize: {
+        toEmployeeId: true,
       },
     }),
 

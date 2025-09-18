@@ -32,10 +32,10 @@ export default function HeaderMapping({
     return UserColumnMatcher.getUnmappedUserFields(currentMapping);
   }, [currentMapping]);
 
-  console.log(availableUserFields);
-  console.log(unmappedHeaders);
-  console.log(currentMapping);
-  console.log(originalHeaders);
+  // console.log(availableUserFields);
+  // console.log(unmappedHeaders);
+  // console.log(currentMapping);
+  // console.log(originalHeaders);
 
   const handleMappingChange = (
     sourceHeader: string,

@@ -27,7 +27,7 @@ export default function SheetSelection({
     onFileUploaded(result);
   };
 
-  console.log(sheetNames);
+  // console.log(sheetNames);
 
   return (
     <Container>

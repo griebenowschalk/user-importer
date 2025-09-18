@@ -142,7 +142,6 @@ export default function DataPreview({
         }
       );
       if (!cancelled) {
-        console.log(result);
         setRows({
           rows: result.chunks.flatMap(c => c.rows),
           errors: result.chunks.flatMap(c => c.errors),
@@ -198,7 +197,6 @@ export default function DataPreview({
           // Optimistically update while we validate the single row
           (async () => {
             try {
-              console.log("validating row", actualRowIndex);
               const chunk = await validateChunkOptimized(
                 [updatedRows[actualRowIndex]!],
                 actualRowIndex

@@ -60,28 +60,27 @@ function applyHooks(rows: RowData[], plan: CompiledConfig, cleanUp?: boolean) {
   for (const [index, row] of rows.entries()) {
     //Column hooks
     for (const [, meta] of plan.bySourceHeader.entries()) {
-      if (!meta.rule.columnHookId) continue;
-      const func = columnHookRegistry[meta.rule.columnHookId];
-      if (!func) continue;
+      if (meta.rule.columnHookId) {
+        const func = columnHookRegistry[meta.rule.columnHookId];
+        if (!func) continue;
+        const before = row[meta.target];
+        const after = func(before, { field: meta.target, row });
 
-      const before = row[meta.target];
-      const after = func(before, { field: meta.target, row });
-
-      if (after !== before) {
-        row[meta.target] = after;
-        if (changes.length < CHANGE_CAP_PER_CHUNK) {
-          changes.push({
-            row: index,
-            field: meta.target,
-            originalValue: before,
-            cleanedValue: after,
-            changeType: [CleaningChangeType.customHook],
-            description: `Column hook ${meta.rule.columnHookId} applied to ${meta.target}`,
-          });
+        if (after !== before) {
+          row[meta.target] = after;
+          if (changes.length < CHANGE_CAP_PER_CHUNK) {
+            changes.push({
+              row: index,
+              field: meta.target,
+              originalValue: before,
+              cleanedValue: after,
+              changeType: [CleaningChangeType.customHook],
+              description: `Column hook ${meta.rule.columnHookId} applied to ${meta.target}`,
+            });
+          }
         }
       }
 
-      console.log("row hooks", rows);
       //Row hooks
       if (plan.rowHooks?.onEntryInitHookId) {
         const rowFunc = rowHookRegistry[plan.rowHooks?.onEntryInitHookId];
@@ -105,7 +104,6 @@ function applyHooks(rows: RowData[], plan: CompiledConfig, cleanUp?: boolean) {
               after[value] !== before[value] &&
               changes.length < CHANGE_CAP_PER_CHUNK
             ) {
-              console.log("value", value);
               changes.push({
                 row: index,
                 field: value as keyof User,
@@ -162,10 +160,6 @@ async function validateChunk(rows: RowData[], startRow: number) {
 
   // yup
   const yupErrors = batchYup(withHooks.rows, startRow);
-
-  // console.log("coreErrors", core.errors);
-  // console.log("withHooks.errors", withHooks.errors);
-  // console.log("yupErrors", yupErrors);
 
   // Offset core and hook indices to global row numbers
   const coreErrors = core.errors.map(e => ({ ...e, row: e.row + startRow }));

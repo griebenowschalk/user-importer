@@ -1,6 +1,6 @@
 import { checkValidNumber, numberUpdate } from "../lib/utils";
 import type { ColumnHook, RowData, RowHook } from "../types";
-import { allowedTLDs, PATTERNS } from "../validation/schema";
+import { allowedTLDs } from "../validation/schema";
 
 const validateEmail = (
   row: RowData
@@ -100,18 +100,7 @@ const validatePhoneNumber = (
   return { row: rowUpdate, errors };
 };
 
-const columnHookRegistry: Record<string, ColumnHook> = {
-  employeeId: (value: unknown) => {
-    if (typeof value !== "string" || !value) return value;
-
-    return value
-      .replace(/\s+/g, "")
-      .toLowerCase()
-      .split("")
-      .filter(char => PATTERNS.EMPLOYEE_ID.test(char))
-      .join("");
-  },
-};
+const columnHookRegistry: Record<string, ColumnHook> = {};
 
 const rowHookRegistry: Record<string, RowHook> = {
   onEntryInit: (row, cleanUp) => {
@@ -124,7 +113,7 @@ const rowHookRegistry: Record<string, RowHook> = {
         updatedRow,
         cleanUp
       );
-      console.log("phoneErrors", phoneErrors);
+
       updatedRow = newRow;
       if (phoneErrors) {
         errors.push(...phoneErrors);

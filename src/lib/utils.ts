@@ -17,7 +17,7 @@ import {
   isValid,
 } from "date-fns";
 import { CountryProperty, customList } from "country-codes-list";
-import parsePhoneNumber, { CountryCode } from "libphonenumber-js";
+import { CountryCode, isValidPhoneNumber } from "libphonenumber-js";
 import { toAlpha2 } from "i18n-iso-countries";
 
 export function cn(...inputs: ClassValue[]) {
@@ -75,6 +75,15 @@ export function normalizeBasic(
   if (v === null || v === undefined) return v;
   if (typeof v === "string" && v.length === 0) return v;
   if (
+    rule.normalize?.toEmployeeId &&
+    (field.includes("id") || rule.type === "id")
+  ) {
+    if (typeof v === "string") {
+      return v.replace(/[^a-z0-9-#]/gi, "").toLowerCase();
+    }
+    return v;
+  }
+  if (
     rule?.normalize?.phoneDigitsOnly &&
     (field.includes("phone") || rule.type === "phone")
   ) {
@@ -96,7 +105,7 @@ export function normalizeBasic(
         phoneNumber = `+${phoneNumber}`;
       }
 
-      return phoneNumber.replace(/[^\d+]/g, "");
+      return phoneNumber.replace(/[^\d+\s]/g, "");
     }
 
     return v;
@@ -260,17 +269,12 @@ export const checkValidNumber = (country: string, number: string) => {
     : "";
 
   try {
-    const phoneNumber = parsePhoneNumber(number, {
+    const phoneNumber = isValidPhoneNumber(number, {
       defaultCountry: alpha2Code as CountryCode,
     });
 
-    const detectedCallingCode = phoneNumber?.countryCallingCode ?? null;
-    const isMismatch = Boolean(
-      detectedCallingCode && callingCode && detectedCallingCode !== callingCode
-    );
-
     return {
-      valid: (phoneNumber?.isValid() ?? false) && !isMismatch,
+      valid: phoneNumber,
       callingCode,
     };
   } catch {

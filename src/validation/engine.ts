@@ -81,8 +81,8 @@ export function compileConfig(
     byTarget.set(target, rule);
   }
 
-  console.log("bySourceHeader", bySourceHeader);
-  console.log("byTarget", byTarget);
+  // console.log("bySourceHeader", bySourceHeader);
+  // console.log("byTarget", byTarget);
 
   // Calculate performance characteristics
   const hasUniquenessChecks = Array.from(bySourceHeader.values()).some(

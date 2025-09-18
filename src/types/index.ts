@@ -70,6 +70,7 @@ export type Complexity = "low" | "medium" | "high";
 export type TrimType = "both" | "left" | "right" | "normalizeSpaces";
 export type CaseType = "lower" | "upper" | "none";
 export type ColumnType =
+  | "id"
   | "string"
   | "email"
   | "date"
@@ -96,6 +97,7 @@ export interface CleaningRule {
     phoneDigitsOnly?: boolean;
     toISODate?: boolean;
     toISO3?: boolean;
+    toEmployeeId?: boolean;
   };
   columnHookId?: string;
   options?: Record<string, unknown>;
