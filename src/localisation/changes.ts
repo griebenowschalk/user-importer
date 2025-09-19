@@ -4,8 +4,8 @@ export const changes = {
   normalized: "Normalized the value",
   customHook: "Custom hook applied",
   rowHook: {
-    phoneNumber: "Phone number cleaned up",
-    workPhoneNumber: "Phone number cleaned up",
-    email: "Email cleaned up",
+    mobileNumber: "for phone number clean up",
+    workPhoneNumber: "for phone number clean up",
+    email: "for email clean up",
   },
 };

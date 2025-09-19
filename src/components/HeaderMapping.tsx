@@ -56,6 +56,8 @@ export default function HeaderMapping({
   };
   // Send final mappings when user clicks next
   const handleNext = () => {
+    console.log("🔍 HeaderMapping - final mappings:", currentMapping);
+    console.log("🔍 HeaderMapping - fileData rows sample:", fileData.rows[0]);
     onNext(currentMapping);
   };
 

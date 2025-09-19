@@ -114,7 +114,7 @@ export default function DataPreview({
       return {
         id: sourceHeader,
         header: mapped ? mapped : sourceHeader,
-        accessorKey: sourceHeader,
+        accessorKey: mapped ? mapped : sourceHeader, // Use target field for data access
         cell: hasOptions
           ? (ctx: CellContext<Record<string, unknown>, unknown>) => (
               <EditableSelect ctx={ctx} options={options} />
@@ -133,7 +133,7 @@ export default function DataPreview({
 
     (async () => {
       const result = await validateRowsOptimized(
-        fileData.rows,
+        fileData.rows, // Now contains raw data
         mappings,
         progress => {
           if (!cancelled) {
@@ -194,12 +194,19 @@ export default function DataPreview({
             return row;
           });
 
+          // Create updated raw row from file data
+          const updatedRawRow = {
+            ...fileData.rows[actualRowIndex],
+            [columnId]: value,
+          };
+
           // Optimistically update while we validate the single row
           (async () => {
             try {
               const chunk = await validateChunkOptimized(
-                [updatedRows[actualRowIndex]!],
-                actualRowIndex
+                [updatedRawRow], // Use the updated raw row
+                actualRowIndex,
+                mappings // Pass current mappings
               );
 
               // Merge validation results for this single row
@@ -250,10 +257,8 @@ export default function DataPreview({
           setFocusedCell(null);
           return;
         }
-        const visibleRowIndex = showErrors
-          ? groupedErrors!.findIndex(g => g.row === rowIndex)
-          : rowIndex;
-        setFocusedCell({ rowIndex: visibleRowIndex, colId: columnId });
+
+        setFocusedCell({ rowIndex: rowIndex, colId: columnId });
       },
     },
   });
@@ -263,7 +268,7 @@ export default function DataPreview({
     count: table.getRowModel().rows.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 36,
-    overscan: 10,
+    overscan: 20, // Increased from 10 to render more rows off-screen
   });
 
   const virtualItems = rowVirtualizer.getVirtualItems();
@@ -347,7 +352,7 @@ export default function DataPreview({
               onClick={() => setShowErrors(true)}
               disabled={!validationProgress?.isComplete}
             >
-              {`Errors Only (${groupedErrors?.length ?? 0})`}
+              {`Errors Only (${rows?.errors?.length ?? 0})`}
             </Button>
           </div>
           <div className="flex items-center gap-2">
@@ -371,7 +376,10 @@ export default function DataPreview({
           />
         ) : (
           <div className="mt-4 border rounded-md">
-            <div ref={parentRef} className="overflow-auto h-[400px]">
+            <div
+              ref={parentRef}
+              className="overflow-auto h-[400px] scroll-smooth"
+            >
               <table className="table-fixed w-max text-sm border-separate border-spacing-0">
                 <thead className="sticky top-0 z-10 bg-gray-200 relative after:content-[''] after:absolute after:inset-x-0 after:-bottom-px after:h-px after:bg-gray-500">
                   {headerGroups.map(headerGroup => (
@@ -415,10 +423,17 @@ export default function DataPreview({
                   ))}
                 </thead>
                 <tbody>
-                  {/* top spacer */}
-                  {virtualItems.length > 0 ? (
+                  {/* top spacer with skeleton effect */}
+                  {virtualItems.length > 0 && virtualItems[0].start > 0 ? (
                     <tr style={{ height: virtualItems[0].start }}>
-                      <td colSpan={columns.length} />
+                      <td
+                        colSpan={columns.length}
+                        className="bg-gradient-to-b from-gray-50 to-gray-100 animate-pulse"
+                      >
+                        <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                          Loading rows...
+                        </div>
+                      </td>
                     </tr>
                   ) : null}
 
@@ -543,7 +558,7 @@ export default function DataPreview({
                     );
                   })}
 
-                  {/* bottom spacer */}
+                  {/* bottom spacer with skeleton effect */}
                   {virtualItems.length > 0 ? (
                     <tr
                       style={{
@@ -552,7 +567,14 @@ export default function DataPreview({
                           (virtualItems[virtualItems.length - 1].end ?? 0),
                       }}
                     >
-                      <td colSpan={columns.length} />
+                      <td
+                        colSpan={columns.length}
+                        className="bg-gradient-to-t from-gray-50 to-gray-100 animate-pulse"
+                      >
+                        <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                          Loading rows...
+                        </div>
+                      </td>
                     </tr>
                   ) : null}
                 </tbody>

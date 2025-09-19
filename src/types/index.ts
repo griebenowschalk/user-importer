@@ -26,7 +26,7 @@ export interface UserFieldMapping {
 export interface FileParseResult {
   headers: string[];
   sheetNames?: string[];
-  rows: Record<string, any>[];
+  rows: Record<string, any>[]; // Raw untransformed rows (now stores original data)
   totalRows: number;
   fileType: "csv" | "xls" | "xlsx" | "json";
   columnMapping: {
@@ -183,7 +183,6 @@ export interface CompiledConfig {
       validators: Array<(value: unknown) => string | null>;
     }
   >;
-  byTarget: Map<keyof User, CleaningRule>;
   rowHooks: typeof rowHooks;
   // Performance flags
   hasUniquenessChecks: boolean;

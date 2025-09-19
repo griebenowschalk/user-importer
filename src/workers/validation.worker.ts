@@ -80,42 +80,42 @@ function applyHooks(rows: RowData[], plan: CompiledConfig, cleanUp?: boolean) {
           }
         }
       }
+    }
 
-      //Row hooks
-      if (plan.rowHooks?.onEntryInitHookId) {
-        const rowFunc = rowHookRegistry[plan.rowHooks?.onEntryInitHookId];
-        if (!rowFunc) continue;
+    //Row hooks
+    if (plan.rowHooks?.onEntryInitHookId) {
+      const rowFunc = rowHookRegistry[plan.rowHooks?.onEntryInitHookId];
+      if (!rowFunc) continue;
 
-        const before = row;
-        const [after, error] = rowFunc(row, cleanUp);
+      const before = row;
+      const [after, error] = rowFunc(row, cleanUp);
 
-        for (const e of error) {
-          errors.push({
-            row: index,
-            field: e.field as keyof User,
-            message: e.message,
-            value: row,
-          });
-        }
+      for (const e of error) {
+        errors.push({
+          row: index,
+          field: e.field as keyof User,
+          message: e.message,
+          value: row,
+        });
+      }
 
-        if (after !== before) {
-          for (const value in after) {
-            if (
-              after[value] !== before[value] &&
-              changes.length < CHANGE_CAP_PER_CHUNK
-            ) {
-              changes.push({
-                row: index,
-                field: value as keyof User,
-                originalValue: before[value],
-                cleanedValue: after[value],
-                changeType: [CleaningChangeType.rowHook],
-                description: `Row hook ${stringChanges.rowHook[value as keyof typeof stringChanges.rowHook]} applied`,
-              });
-            }
+      if (after !== before) {
+        for (const value in after) {
+          if (
+            after[value] !== before[value] &&
+            changes.length < CHANGE_CAP_PER_CHUNK
+          ) {
+            changes.push({
+              row: index,
+              field: value as keyof User,
+              originalValue: before[value],
+              cleanedValue: after[value],
+              changeType: [CleaningChangeType.rowHook],
+              description: `Row hook ${stringChanges.rowHook[value as keyof typeof stringChanges.rowHook]} applied`,
+            });
           }
-          rows[index] = after;
         }
+        rows[index] = after;
       }
     }
   }
@@ -149,8 +149,45 @@ async function validateInit(mapping: Record<string, keyof User>) {
   PLAN = compileConfig(mapping, rules, rowHooks);
 }
 
-async function validateChunk(rows: RowData[], startRow: number) {
+/**
+ * Transform raw rows to target structure using current mappings
+ */
+function transformRows(
+  rawRows: RowData[],
+  mapping: Record<string, keyof User>
+): RowData[] {
+  return rawRows.map(rawRow => {
+    const transformed: Record<string, unknown> = {};
+
+    // Apply current mappings
+    for (const [sourceHeader, targetField] of Object.entries(mapping)) {
+      if (rawRow[sourceHeader] !== undefined) {
+        transformed[targetField] = rawRow[sourceHeader];
+      }
+    }
+
+    // Keep unmapped fields as-is
+    for (const [key, value] of Object.entries(rawRow)) {
+      if (!mapping[key] && value !== undefined) {
+        transformed[key] = value;
+      }
+    }
+
+    return transformed as RowData;
+  });
+}
+
+async function validateChunk(
+  rawRows: RowData[],
+  startRow: number,
+  mapping?: Record<string, keyof User>
+) {
   if (!PLAN) throw new Error("Plan not initialized");
+
+  // Transform raw rows to target structure if mapping provided
+  const rows = mapping ? transformRows(rawRows, mapping) : rawRows;
+
+  console.log("[Validation] Transformed rows:", rows);
 
   // core ops (trim/case/normalize/regex/options/unique)
   const core = validationCore(rows, PLAN);
@@ -183,20 +220,21 @@ async function validateChunk(rows: RowData[], startRow: number) {
 }
 
 async function validateAll(
-  rows: RowData[],
+  rawRows: RowData[],
+  mapping: Record<string, keyof User>,
   onProgress?: (progress: ValidationProgress) => void
 ): Promise<ValidationProgress> {
-  const CHUNK = pickChunkSize(rows);
+  const CHUNK = pickChunkSize(rawRows);
   const chunks: ValidationChunk[] = [];
   const debounced = onProgress ? debounceProgress(onProgress, 0) : undefined;
 
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const chunk = await validateChunk(rows.slice(i, i + CHUNK), i);
+  for (let i = 0; i < rawRows.length; i += CHUNK) {
+    const chunk = await validateChunk(rawRows.slice(i, i + CHUNK), i, mapping);
     chunks.push(chunk);
     debounced?.({
       chunks,
       metadata: {
-        totalRows: rows.length,
+        totalRows: rawRows.length,
         processedRows: chunks.reduce(
           (acc, chunk) => acc + chunk.rows.length,
           0
@@ -208,7 +246,7 @@ async function validateAll(
         ),
         estimatedTimeRemaining: 0,
       },
-      isComplete: i + CHUNK >= rows.length,
+      isComplete: i + CHUNK >= rawRows.length,
     });
 
     // keep worker responsive
@@ -225,7 +263,7 @@ async function validateAll(
   const final = {
     chunks,
     metadata: {
-      totalRows: rows.length,
+      totalRows: rawRows.length,
       processedRows: chunks.reduce((acc, chunk) => acc + chunk.rows.length, 0),
       errorCount: chunks.reduce((acc, chunk) => acc + chunk.errors.length, 0),
       changeCount: chunks.reduce((acc, chunk) => acc + chunk.changes.length, 0),

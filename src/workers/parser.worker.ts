@@ -154,27 +154,18 @@ function parseExcelSheet(workBook: WorkBook, sheetNames: string[]) {
 
   console.log(` [Excel] Total rows from all sheets: ${allRows.length}`);
 
-  const mappedRows = allRows.map(row =>
-    UserColumnMatcher.mapRowToUserHybrid(row, mapping)
-  );
-
-  const hybridHeaders = UserColumnMatcher.createHybridHeaders(
-    masterHeaders,
-    mapping
-  );
-
   console.log("[Excel] Final result:", {
-    headers: hybridHeaders,
-    totalRows: mappedRows.length,
-    sampleRow: mappedRows[0],
+    headers: masterHeaders,
+    totalRows: allRows.length,
+    sampleRow: allRows[0],
     mappedColumns: Object.keys(mapping).length,
     unmappedColumns: masterHeaders.length - Object.keys(mapping).length,
   });
 
   return {
-    headers: hybridHeaders,
-    rows: mappedRows,
-    totalRows: mappedRows.length,
+    headers: masterHeaders, // Return original headers, not hybrid
+    rows: allRows, // Return raw data, not mapped
+    totalRows: allRows.length,
     columnMapping: UserColumnMatcher.mappingIncludesHeader(
       mapping,
       masterHeaders
@@ -355,27 +346,18 @@ async function parseCSV(file: File): Promise<FileParseResult> {
         const mapping = UserColumnMatcher.createUserFieldMapping(headers);
         console.log("[CSV] Column mapping created:", mapping);
 
-        const mappedRows = rows.map(row =>
-          UserColumnMatcher.mapRowToUserHybrid(row, mapping)
-        );
-
-        const hybridHeaders = UserColumnMatcher.createHybridHeaders(
-          headers,
-          mapping
-        );
-
         console.log("[CSV] Final result:", {
-          headers: hybridHeaders,
-          totalRows: mappedRows.length,
-          sampleRow: mappedRows[0],
+          headers: headers,
+          totalRows: rows.length,
+          sampleRow: rows[0],
           mappedColumns: Object.keys(mapping).length,
           unmappedColumns: headers.length - Object.keys(mapping).length,
         });
 
         resolve({
-          headers: hybridHeaders,
-          rows: mappedRows,
-          totalRows: mappedRows.length,
+          headers: headers, // Return original headers
+          rows: rows, // Return raw data, not mapped
+          totalRows: rows.length,
           fileType: "csv",
           columnMapping: UserColumnMatcher.mappingIncludesHeader(
             mapping,
@@ -425,27 +407,18 @@ async function parseJSON(file: File): Promise<FileParseResult> {
         const mapping = UserColumnMatcher.createUserFieldMapping(headers);
         console.log("[JSON] Column mapping created:", mapping);
 
-        const mappedRows = rows.map(row =>
-          UserColumnMatcher.mapRowToUserHybrid(row, mapping)
-        );
-
-        const hybridHeaders = UserColumnMatcher.createHybridHeaders(
-          headers,
-          mapping
-        );
-
         console.log("[JSON] Final result:", {
-          headers: hybridHeaders,
-          totalRows: mappedRows.length,
-          sampleRow: mappedRows[0],
+          headers: headers,
+          totalRows: rows.length,
+          sampleRow: rows[0],
           mappedColumns: Object.keys(mapping).length,
           unmappedColumns: headers.length - Object.keys(mapping).length,
         });
 
         resolve({
-          headers: hybridHeaders,
-          rows: mappedRows,
-          totalRows: mappedRows.length,
+          headers: headers, // Return original headers
+          rows: rows, // Return raw data, not mapped
+          totalRows: rows.length,
           fileType: "json",
           columnMapping: UserColumnMatcher.mappingIncludesHeader(
             mapping,

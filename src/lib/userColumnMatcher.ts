@@ -320,50 +320,6 @@ class UserColumnMatcher {
     return null;
   }
 
-  /**
-   * Creates a hybrid row structure with mapped User fields + unmapped original headers
-   * @param row - The original row data
-   * @param mapping - The header-to-field mapping
-   * @returns Hybrid row with mapped User fields + unmapped original headers
-   */
-  static mapRowToUserHybrid(
-    row: Record<string, any>,
-    mapping: UserFieldMapping
-  ): Record<string, any> {
-    const mappedRow: Record<string, any> = {};
-
-    // Add mapped fields (User model field names)
-    for (const [src, field] of Object.entries(mapping)) {
-      if (row[src] !== undefined) {
-        mappedRow[field] = row[src];
-      }
-    }
-
-    // Add unmapped fields (original header names)
-    for (const [header, value] of Object.entries(row)) {
-      if (!mapping[header] && value !== undefined) {
-        mappedRow[header] = value; // Keep original header name
-      }
-    }
-
-    return mappedRow;
-  }
-
-  /**
-   * Creates hybrid headers: mapped User fields + unmapped original headers
-   * @param originalHeaders - All original headers from the file
-   * @param mapping - The header-to-field mapping
-   * @returns Array of headers: mapped User fields + unmapped original headers
-   */
-  static createHybridHeaders(
-    originalHeaders: string[],
-    mapping: UserFieldMapping
-  ): string[] {
-    const mappedHeaders = Object.values(mapping);
-    const unmappedHeaders = originalHeaders.filter(header => !mapping[header]);
-    return [...mappedHeaders, ...unmappedHeaders];
-  }
-
   static mappingIncludesHeader(mapping: UserFieldMapping, headers: string[]) {
     return {
       mapped: mapping, // "empId" → "employeeId"

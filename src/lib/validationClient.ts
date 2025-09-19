@@ -9,10 +9,15 @@ import type {
 type Api = {
   validateInit(mapping: Record<string, keyof User>): Promise<void>;
   validateAll(
-    rows: RowData[],
+    rawRows: RowData[],
+    mapping: Record<string, keyof User>,
     onProgress?: (progress: ValidationProgress) => void
   ): Promise<ValidationProgress>;
-  validateChunk(rows: RowData[], startRow: number): Promise<ValidationChunk>;
+  validateChunk(
+    rawRows: RowData[],
+    startRow: number,
+    mapping?: Record<string, keyof User>
+  ): Promise<ValidationChunk>;
 };
 
 let remotePromise: Promise<Remote<Api>> | null = null;
@@ -31,19 +36,24 @@ function getRemote() {
 }
 
 export async function validateRowsOptimized(
-  rows: RowData[],
+  rawRows: RowData[],
   mapping: Record<string, keyof User>,
   onProgress?: (progress: ValidationProgress) => void
 ) {
   const remote = await getRemote();
   await remote.validateInit(mapping);
-  return remote.validateAll(rows, onProgress ? proxy(onProgress) : undefined);
+  return remote.validateAll(
+    rawRows,
+    mapping,
+    onProgress ? proxy(onProgress) : undefined
+  );
 }
 
 export async function validateChunkOptimized(
-  rows: RowData[],
-  startRow: number
+  rawRows: RowData[],
+  startRow: number,
+  mapping?: Record<string, keyof User>
 ) {
   const remote = await getRemote();
-  return remote.validateChunk(rows, startRow);
+  return remote.validateChunk(rawRows, startRow, mapping);
 }

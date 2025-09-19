@@ -33,6 +33,7 @@ export default function FileUpload({
       }
 
       const result = await parseFileOptimized(file);
+      console.log("🔍 FileUpload - parsed result rows sample:", result.rows[0]);
       onFileUploaded(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to parse file");

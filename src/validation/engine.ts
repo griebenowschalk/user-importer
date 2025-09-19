@@ -31,7 +31,6 @@ export function compileConfig(
       validators: Array<(value: unknown) => string | null>;
     }
   >();
-  const byTarget = new Map<keyof User, CleaningRule>();
 
   // Pre-compile all validation functions for speed
   for (const [sourceHeader, target] of Object.entries(mapping)) {
@@ -78,11 +77,9 @@ export function compileConfig(
       regex: rule.regex,
       validators,
     });
-    byTarget.set(target, rule);
   }
 
-  // console.log("bySourceHeader", bySourceHeader);
-  // console.log("byTarget", byTarget);
+  console.log("bySourceHeader", bySourceHeader);
 
   // Calculate performance characteristics
   const hasUniquenessChecks = Array.from(bySourceHeader.values()).some(
@@ -91,7 +88,6 @@ export function compileConfig(
 
   return {
     bySourceHeader,
-    byTarget,
     rowHooks: hooks,
     hasUniquenessChecks,
   };
@@ -121,8 +117,22 @@ export function validationCore(
     const sourceRow: Record<string, unknown> = rows[i];
     const destinationRow = { ...sourceRow };
 
-    for (const [sourceHeader, meta] of config.bySourceHeader.entries()) {
-      let cleanedValue: unknown = sourceRow[sourceHeader];
+    if (i === 0) {
+      // Only log for first row to avoid spam
+      console.log("🔍 ValidationCore - Row processing:");
+      console.log("  - sourceRow keys:", Object.keys(sourceRow));
+      console.log("  - sourceRow sample:", sourceRow);
+      console.log("  - bySourceHeader mappings:");
+      for (const [src, meta] of config.bySourceHeader.entries()) {
+        console.log(`    "${src}" → "${meta.target}"`);
+      }
+      console.log("---");
+    }
+
+    for (const [, meta] of config.bySourceHeader.entries()) {
+      // Read from target field since rows are pre-transformed by worker
+      let cleanedValue: unknown = sourceRow[meta.target];
+
       let trackChanges: CleaningChangeType[] = [];
       const originalValue = cleanedValue;
 
@@ -154,7 +164,6 @@ export function validationCore(
       }
 
       destinationRow[meta.target] = cleanedValue;
-      destinationRow[sourceHeader] = cleanedValue;
     }
 
     for (const entry of config.bySourceHeader.entries()) {

@@ -48,6 +48,9 @@ export async function parseFileOptimized(file: File, sheetNames?: string[]) {
     if (file.size > 5 * 1024 * 1024) {
       // 5MB threshold
       // Large file: zero-copy path
+      // Sending buffer (with transfer) to the worker is faster and more
+      // memory-efficient for large files because it avoids duplicating the file in memory (zero-copy),
+      // while sending the File object would require structured cloning, which is slower and uses more memory.
       const buffer = await file.arrayBuffer();
       return remote.parseExcelBuffer(
         transfer(buffer, [buffer]),
