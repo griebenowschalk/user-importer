@@ -21,6 +21,7 @@ import { ObjectSchema } from "yup";
 import { changes as stringChanges } from "../localisation/changes";
 
 let PLAN: CompiledConfig | null = null;
+let GLOBAL_UNIQUE_TRACKER: Map<keyof User, Map<string, number>> | null = null;
 
 const CHANGE_CAP_PER_CHUNK = 5000;
 
@@ -147,6 +148,17 @@ function batchYup(rows: RowData[], startRow: number) {
 async function validateInit(mapping: Record<string, keyof User>) {
   const rules = extractCleaningRules(userSchema as ObjectSchema<User>);
   PLAN = compileConfig(mapping, rules, rowHooks);
+
+  // Initialize global unique tracker
+  GLOBAL_UNIQUE_TRACKER = null;
+  if (PLAN.hasUniquenessChecks) {
+    GLOBAL_UNIQUE_TRACKER = new Map();
+    for (const [, meta] of PLAN.bySourceHeader.entries()) {
+      if (meta.rule.unique) {
+        GLOBAL_UNIQUE_TRACKER.set(meta.target, new Map());
+      }
+    }
+  }
 }
 
 /**
@@ -187,10 +199,8 @@ async function validateChunk(
   // Transform raw rows to target structure if mapping provided
   const rows = mapping ? transformRows(rawRows, mapping) : rawRows;
 
-  console.log("[Validation] Transformed rows:", rows);
-
   // core ops (trim/case/normalize/regex/options/unique)
-  const core = validationCore(rows, PLAN);
+  const core = validationCore(rows, PLAN, GLOBAL_UNIQUE_TRACKER, startRow);
 
   // hooks (column/row)
   const withHooks = applyHooks(core.rows, PLAN, rows.length > 1);

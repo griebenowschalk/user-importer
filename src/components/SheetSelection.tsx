@@ -27,8 +27,6 @@ export default function SheetSelection({
     onFileUploaded(result);
   };
 
-  // console.log(sheetNames);
-
   return (
     <Container>
       <Typography as="h2">Select a sheet</Typography>

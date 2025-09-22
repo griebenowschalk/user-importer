@@ -51,40 +51,7 @@ const api = {
   },
 };
 
-async function parseExcelFromBuffer(
-  buffer: ArrayBuffer,
-  fileName: string,
-  sheetNames?: string[]
-): Promise<FileParseResult> {
-  return new Promise((resolve, reject) => {
-    try {
-      const workbook = read(new Uint8Array(buffer), { type: "array" });
-      const { headers, rows, totalRows, columnMapping } = parseExcelSheet(
-        workbook,
-        sheetNames || workbook.SheetNames
-      );
-      resolve({
-        headers,
-        rows: rows as Record<string, any>[],
-        totalRows,
-        fileType: fileName.toLowerCase().endsWith(".xlsx") ? "xlsx" : "xls",
-        columnMapping,
-      });
-    } catch (error) {
-      reject(
-        new Error(
-          `Excel parsing failed: ${
-            error instanceof Error ? error.message : "Unknown error"
-          }`
-        )
-      );
-    }
-  });
-}
-
 function parseExcelSheet(workBook: WorkBook, sheetNames: string[]) {
-  console.log("[Excel] Starting sheet analysis for sheets:", sheetNames);
-
   // First pass: analyze all sheets to find the best header
   const sheetAnalysis = sheetNames
     .map(sheetName => {
@@ -96,10 +63,6 @@ function parseExcelSheet(workBook: WorkBook, sheetNames: string[]) {
       const potentialHeaders = jsonData[0] as any[];
       const headerQuality =
         UserColumnMatcher.analyzeHeaderQuality(potentialHeaders);
-
-      console.log(
-        `[Excel] Sheet "${sheetName}": ${potentialHeaders.length} headers, quality: ${headerQuality}`
-      );
 
       return {
         sheetName,
@@ -122,24 +85,15 @@ function parseExcelSheet(workBook: WorkBook, sheetNames: string[]) {
       : best
   );
 
-  console.log(
-    ` [Excel] Best sheet selected: "${bestSheet?.sheetName}" with quality: ${bestSheet?.quality}`
-  );
-
   // Use the best sheet's headers as master headers
   const masterHeaders = bestSheet?.headers as string[];
-  console.log("[Excel] Master headers:", masterHeaders);
 
   const mapping = UserColumnMatcher.createUserFieldMapping(masterHeaders);
-  console.log("[Excel] Column mapping created:", mapping);
 
   // Combine all sheets using the master headers
   const allRows: Record<string, any>[] = [];
 
   sheetAnalysis.forEach(sheet => {
-    console.log(
-      ` [Excel] Processing sheet "${sheet?.sheetName}" with ${sheet?.rowCount} rows`
-    );
     const rows = sheet?.data.map(row => {
       const obj: Record<string, any> = {};
       masterHeaders?.forEach((header, index) => {
@@ -150,16 +104,6 @@ function parseExcelSheet(workBook: WorkBook, sheetNames: string[]) {
     if (rows) {
       allRows.push(...rows);
     }
-  });
-
-  console.log(` [Excel] Total rows from all sheets: ${allRows.length}`);
-
-  console.log("[Excel] Final result:", {
-    headers: masterHeaders,
-    totalRows: allRows.length,
-    sampleRow: allRows[0],
-    mappedColumns: Object.keys(mapping).length,
-    unmappedColumns: masterHeaders.length - Object.keys(mapping).length,
   });
 
   return {
@@ -274,6 +218,37 @@ async function getSheetNames(file: File): Promise<string[]> {
   });
 }
 
+async function parseExcelFromBuffer(
+  buffer: ArrayBuffer,
+  fileName: string,
+  sheetNames?: string[]
+): Promise<FileParseResult> {
+  return new Promise((resolve, reject) => {
+    try {
+      const workbook = read(new Uint8Array(buffer), { type: "array" });
+      const { headers, rows, totalRows, columnMapping } = parseExcelSheet(
+        workbook,
+        sheetNames || workbook.SheetNames
+      );
+      resolve({
+        headers,
+        rows: rows as Record<string, any>[],
+        totalRows,
+        fileType: fileName.toLowerCase().endsWith(".xlsx") ? "xlsx" : "xls",
+        columnMapping,
+      });
+    } catch (error) {
+      reject(
+        new Error(
+          `Excel parsing failed: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`
+        )
+      );
+    }
+  });
+}
+
 async function parseExcel(
   file: File,
   sheetNames?: string[]
@@ -318,15 +293,12 @@ async function parseExcel(
  * @returns The parsed file
  */
 async function parseCSV(file: File): Promise<FileParseResult> {
-  console.log(" [CSV] Starting CSV parsing");
-
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
       complete: results => {
         if (results.errors.length > 0) {
-          console.error("[CSV] Parsing errors:", results.errors);
           reject(
             new Error(
               `CSV parsing errors: ${results.errors
@@ -340,19 +312,7 @@ async function parseCSV(file: File): Promise<FileParseResult> {
         const rows = results.data as Record<string, any>[];
         const headers = results.meta.fields || [];
 
-        console.log("[CSV] Headers found:", headers);
-        console.log("[CSV] Total rows:", rows.length);
-
         const mapping = UserColumnMatcher.createUserFieldMapping(headers);
-        console.log("[CSV] Column mapping created:", mapping);
-
-        console.log("[CSV] Final result:", {
-          headers: headers,
-          totalRows: rows.length,
-          sampleRow: rows[0],
-          mappedColumns: Object.keys(mapping).length,
-          unmappedColumns: headers.length - Object.keys(mapping).length,
-        });
 
         resolve({
           headers: headers, // Return original headers
@@ -378,8 +338,6 @@ async function parseCSV(file: File): Promise<FileParseResult> {
  * @returns The parsed file
  */
 async function parseJSON(file: File): Promise<FileParseResult> {
-  console.log("[JSON] Starting JSON parsing");
-
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
@@ -401,19 +359,7 @@ async function parseJSON(file: File): Promise<FileParseResult> {
         const headers = Object.keys(data[0]);
         const rows = data as Record<string, any>[];
 
-        console.log("[JSON] Headers found:", headers);
-        console.log("[JSON] Total rows:", rows.length);
-
         const mapping = UserColumnMatcher.createUserFieldMapping(headers);
-        console.log("[JSON] Column mapping created:", mapping);
-
-        console.log("[JSON] Final result:", {
-          headers: headers,
-          totalRows: rows.length,
-          sampleRow: rows[0],
-          mappedColumns: Object.keys(mapping).length,
-          unmappedColumns: headers.length - Object.keys(mapping).length,
-        });
 
         resolve({
           headers: headers, // Return original headers

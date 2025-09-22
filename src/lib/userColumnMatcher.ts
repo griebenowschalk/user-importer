@@ -199,8 +199,6 @@ class UserColumnMatcher {
    * @returns The user field mapping.
    */
   static createUserFieldMapping(headers: string[]): UserFieldMapping {
-    console.log(" [UserColumnMatcher] Creating mapping for headers:", headers);
-
     const candidates = new Map<
       keyof User,
       { header: string; exact: boolean; score?: number }
@@ -210,7 +208,6 @@ class UserColumnMatcher {
       if (!header || header.trim() === "") continue;
 
       const match = this.findBestUserFieldMatch(header);
-      console.log(` [UserColumnMatcher] Header "${header}" → Match:`, match);
 
       if (!match) continue;
 
@@ -221,16 +218,10 @@ class UserColumnMatcher {
           exact: match.exactMatch,
           score: match.score,
         });
-        console.log(
-          `[UserColumnMatcher] First candidate for ${match.field}: "${header}"`
-        );
         continue;
       }
 
       if (match.exactMatch && !current.exact) {
-        console.log(
-          ` [UserColumnMatcher] Replacing "${current.header}" with exact match "${header}" for ${match.field}`
-        );
         candidates.set(match.field, {
           header,
           exact: match.exactMatch,
@@ -240,9 +231,6 @@ class UserColumnMatcher {
         const currentScore = current.score ?? 1;
         const matchScore = match.score ?? 1;
         if (matchScore < currentScore) {
-          console.log(
-            ` [UserColumnMatcher] Replacing "${current.header}" (score: ${currentScore}) with "${header}" (score: ${matchScore}) for ${match.field}`
-          );
           candidates.set(match.field, {
             header,
             exact: match.exactMatch,
@@ -257,7 +245,6 @@ class UserColumnMatcher {
       mapping[candidate.header] = field;
     }
 
-    console.log("[UserColumnMatcher] Final mapping:", mapping);
     return mapping;
   }
 
@@ -286,29 +273,16 @@ class UserColumnMatcher {
     header: string
   ): { field: keyof User; exactMatch: boolean; score?: number } | null {
     const normalizedHeader = this.norm(header.trim());
-    console.log(
-      ` [UserColumnMatcher] Normalized header: "${header}" → "${normalizedHeader}"`
-    );
 
     const exactMatch = this.index.get(normalizedHeader);
     if (exactMatch) {
-      console.log(
-        `[UserColumnMatcher] Exact match found: "${header}" → ${exactMatch}`
-      );
       return { field: exactMatch, exactMatch: true };
     }
 
     const results = this.fuse.search(normalizedHeader);
-    console.log(
-      ` [UserColumnMatcher] Fuzzy search results for "${normalizedHeader}":`,
-      results
-    );
 
     if (results.length > 0) {
       const bestMatch = results[0];
-      console.log(
-        ` [UserColumnMatcher] Best fuzzy match: "${header}" → ${bestMatch.item.field} (score: ${bestMatch.score})`
-      );
       return {
         field: bestMatch.item.field,
         exactMatch: false,
@@ -316,7 +290,6 @@ class UserColumnMatcher {
       };
     }
 
-    console.log(`[UserColumnMatcher] No match found for "${header}"`);
     return null;
   }
 

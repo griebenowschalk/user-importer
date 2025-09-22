@@ -79,8 +79,6 @@ export function compileConfig(
     });
   }
 
-  console.log("bySourceHeader", bySourceHeader);
-
   // Calculate performance characteristics
   const hasUniquenessChecks = Array.from(bySourceHeader.values()).some(
     m => m.rule.unique
@@ -95,17 +93,23 @@ export function compileConfig(
 
 export function validationCore(
   rows: Record<string, unknown>[],
-  config: CompiledConfig
+  config: CompiledConfig,
+  globalUniqueTracker?: Map<keyof User, Map<string, number>> | null,
+  startRowOffset: number = 0
 ) {
   const processedRows = new Array(rows.length);
   const errors: ValidationError[] = [];
   const changes: CleaningChange[] = [];
 
-  const uniqueTracker = config.hasUniquenessChecks
-    ? new Map<keyof User, Map<string, number>>()
-    : null;
+  // Use global tracker if provided, otherwise create local one
+  const uniqueTracker =
+    globalUniqueTracker ||
+    (config.hasUniquenessChecks
+      ? new Map<keyof User, Map<string, number>>()
+      : null);
 
-  if (uniqueTracker) {
+  // Only initialize local tracker if we don't have a global one
+  if (uniqueTracker && !globalUniqueTracker) {
     for (const entry of config.bySourceHeader.entries()) {
       if (entry[1].rule.unique) {
         uniqueTracker.set(entry[1].target, new Map());
@@ -116,18 +120,6 @@ export function validationCore(
   for (let i = 0; i < rows.length; i++) {
     const sourceRow: Record<string, unknown> = rows[i];
     const destinationRow = { ...sourceRow };
-
-    if (i === 0) {
-      // Only log for first row to avoid spam
-      console.log("🔍 ValidationCore - Row processing:");
-      console.log("  - sourceRow keys:", Object.keys(sourceRow));
-      console.log("  - sourceRow sample:", sourceRow);
-      console.log("  - bySourceHeader mappings:");
-      for (const [src, meta] of config.bySourceHeader.entries()) {
-        console.log(`    "${src}" → "${meta.target}"`);
-      }
-      console.log("---");
-    }
 
     for (const [, meta] of config.bySourceHeader.entries()) {
       // Read from target field since rows are pre-transformed by worker
@@ -197,14 +189,19 @@ export function validationCore(
 
         if (tracker?.has(uniqueKey)) {
           const firstRow = tracker.get(uniqueKey);
-          errors.push({
-            row: i,
-            field: meta.target,
-            message: `Duplicate value found in row ${firstRow ? firstRow + 1 : 0}`,
-            value,
-          });
+          const currentGlobalRow = i + startRowOffset;
+          // Only report as duplicate if it's a different row
+          if (firstRow !== currentGlobalRow) {
+            errors.push({
+              row: i,
+              field: meta.target,
+              message: `Duplicate value found in row ${firstRow !== undefined ? firstRow + 1 : 0}`,
+              value,
+            });
+          }
         } else {
-          tracker?.set(uniqueKey, i);
+          // Store global row index for accurate duplicate reporting
+          tracker?.set(uniqueKey, i + startRowOffset);
         }
       }
     }
