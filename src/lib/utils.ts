@@ -311,3 +311,23 @@ export const numberUpdate = (
 
   return { newNumber, error };
 };
+
+// fixed column widths based on content type
+export const getColumnWidth = (header: string) => {
+  if (header.includes("email")) return 200;
+  if (
+    header.includes("language") ||
+    header.includes("country") ||
+    header === "_row" ||
+    header === "#"
+  )
+    return 80;
+  if (
+    header.toLowerCase().includes("name") ||
+    header.toLowerCase().includes("id") ||
+    header.toLowerCase().includes("date") ||
+    header.toLowerCase().includes("phone")
+  )
+    return 120;
+  return 150; // default width
+};

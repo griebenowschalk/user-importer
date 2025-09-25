@@ -190,7 +190,6 @@ export function validationCore(
         if (tracker?.has(uniqueKey)) {
           const firstRow = tracker.get(uniqueKey);
           const currentGlobalRow = i + startRowOffset;
-          // Only report as duplicate if it's a different row
           if (firstRow !== currentGlobalRow) {
             errors.push({
               row: i,
@@ -200,7 +199,6 @@ export function validationCore(
             });
           }
         } else {
-          // Store global row index for accurate duplicate reporting
           tracker?.set(uniqueKey, i + startRowOffset);
         }
       }

@@ -6,6 +6,7 @@ import {
   RowData,
   ColumnDef,
   type CellContext,
+  RowSelectionState,
 } from "@tanstack/react-table";
 import { extractCleaningRules, userSchema } from "../validation/schema";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -38,13 +39,22 @@ import {
   getGroupedFieldMessages,
   groupErrorsByRow,
   groupChangesByRow,
+  getColumnWidth,
 } from "../lib/utils";
-import { FileSearchIcon, DownloadIcon, InfoIcon } from "lucide-react";
+import {
+  FileSearchIcon,
+  DownloadIcon,
+  InfoIcon,
+  DeleteIcon,
+  CopyIcon,
+} from "lucide-react";
 import { fields } from "../localisation/fields";
 import EditableSelect from "./ui/editableSelect";
 import EditableCell from "./ui/editableCell";
 import useSkipper from "../hooks/useSkipper";
 import useFindError from "../hooks/useFindError";
+import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
+import { Checkbox } from "./ui/checkbox";
 
 interface DataPreviewProps {
   fileData: FileParseResult;
@@ -61,6 +71,8 @@ type HighlightCell = {
 declare module "@tanstack/react-table" {
   interface TableMeta<TData extends RowData> {
     updateData: (rowIndex: number, columnId: string, value: unknown) => void;
+    deleteRows: (rowIndices: number[]) => void;
+    duplicateRow: (rowIndex: number) => void;
     // Reference generic to satisfy no-unused-vars
     __rowType__?: TData;
     setFocusedCell?: (rowIndex: number, columnId: string | null) => void;
@@ -77,6 +89,7 @@ export default function DataPreview({
   const [groupedErrors, setGroupedErrors] = useState<GroupedRowError[] | null>(
     null
   );
+  const [selectedRows, setSelectedRows] = useState<RowSelectionState>({});
   const [autoResetPageIndex, skipAutoResetPageIndex] = useSkipper();
   const [groupedChanges, setGroupedChanges] = useState<
     GroupedRowChange[] | null
@@ -94,13 +107,43 @@ export default function DataPreview({
 
     const numberCol: ColumnDef<Record<string, unknown>> = {
       id: "_row",
-      header: "#",
-      cell: info => {
-        const displayIndex = info.row.index;
+      header: ({ table }) => (
+        <div className="flex items-center gap-2 justify-center">
+          <Typography as="span">#</Typography>
+          <Checkbox
+            checked={table.getIsAllRowsSelected()}
+            onCheckedChange={() => table.toggleAllRowsSelected()}
+          />
+        </div>
+      ),
+      cell: ({ row }) => {
+        const displayIndex = row.index;
         const originalRow = showErrors
           ? (groupedErrors?.[displayIndex]?.row ?? displayIndex)
           : displayIndex;
-        return String(originalRow + 1);
+        return (
+          <div
+            onClick={() => row.toggleSelected()}
+            className="flex items-center gap-2 justify-center group cursor-pointer"
+          >
+            {row.getIsSelected() ? (
+              <Checkbox
+                checked={row.getIsSelected()}
+                onCheckedChange={() => row.toggleSelected()}
+              />
+            ) : (
+              <>
+                <span className="group-hover:hidden">{originalRow + 1}</span>
+                <span className="hidden group-hover:inline-flex">
+                  <Checkbox
+                    checked={false}
+                    onCheckedChange={() => row.toggleSelected()}
+                  />
+                </span>
+              </>
+            )}
+          </div>
+        );
       },
     };
 
@@ -167,11 +210,71 @@ export default function DataPreview({
     [rows, showErrors, groupedErrors]
   );
 
+  // Shared validation function for both updateData and duplicateRow
+  const validateAndUpdateRow = async (
+    rowData: Record<string, unknown>,
+    targetRowIndex: number,
+    mode: "replace" | "add"
+  ) => {
+    try {
+      const chunk = await validateChunkOptimized(
+        [rowData],
+        targetRowIndex,
+        mappings
+      );
+
+      setRows(current => {
+        if (!current) return current;
+
+        const mergedRows = current.rows.slice();
+        if (chunk.rows[0]) {
+          mergedRows[targetRowIndex] = chunk.rows[0];
+        }
+
+        let newErrors: typeof current.errors;
+        let newChanges: typeof current.changes;
+
+        if (mode === "replace") {
+          // Replace errors and changes for this row index only
+          const otherErrors = (current.errors ?? []).filter(
+            e => e.row !== targetRowIndex
+          );
+          const otherChanges = (current.changes ?? []).filter(
+            c => c.row !== targetRowIndex
+          );
+          newErrors = otherErrors.concat(chunk.errors);
+          newChanges = otherChanges.concat(chunk.changes);
+        } else {
+          // Add new errors and changes for duplicated row
+          newErrors = current.errors.concat(chunk.errors);
+          newChanges = current.changes.concat(chunk.changes);
+        }
+
+        // Update grouped state
+        setGroupedErrors(groupErrorsByRow(newErrors));
+        setGroupedChanges(groupChangesByRow(newChanges));
+
+        return {
+          rows: mergedRows,
+          errors: newErrors,
+          changes: newChanges,
+        };
+      });
+    } catch (err) {
+      console.error(`Row validation failed (${mode}):`, err);
+    }
+  };
+
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
     autoResetPageIndex,
+    enableMultiRowSelection: true,
+    onRowSelectionChange: setSelectedRows,
+    state: {
+      rowSelection: selectedRows,
+    },
     meta: {
       updateData: (rowIndex, columnId, value) => {
         // Skip page index reset until after next rerender
@@ -200,54 +303,105 @@ export default function DataPreview({
             [columnId]: value,
           };
 
-          // Optimistically update while we validate the single row
-          (async () => {
-            try {
-              const chunk = await validateChunkOptimized(
-                [updatedRawRow], // Use the updated raw row
-                actualRowIndex,
-                mappings // Pass current mappings
-              );
-
-              // Merge validation results for this single row
-              setRows(current => {
-                if (!current) return current;
-
-                const mergedRows = current.rows.slice();
-                mergedRows[actualRowIndex] = chunk.rows[0]!;
-
-                // Replace errors and changes for this row index only
-                const otherErrors = (current.errors ?? []).filter(
-                  e => e.row !== actualRowIndex
-                );
-                const otherChanges = (current.changes ?? []).filter(
-                  c => c.row !== actualRowIndex
-                );
-
-                const newErrors = otherErrors.concat(chunk.errors);
-                const newChanges = otherChanges.concat(chunk.changes);
-
-                // Update grouped derived state synchronously with rows/errors/changes
-                setGroupedErrors(groupErrorsByRow(newErrors));
-                setGroupedChanges(prev => [
-                  ...(prev ?? []),
-                  ...groupChangesByRow(newChanges),
-                ]);
-
-                return {
-                  rows: mergedRows,
-                  errors: newErrors,
-                  changes: newChanges,
-                };
-              });
-            } catch (err) {
-              console.error("Single-row validation failed", err);
-            }
-          })();
+          // Validate and update the modified row
+          validateAndUpdateRow(updatedRawRow, actualRowIndex, "replace");
 
           return {
             ...old,
             rows: updatedRows,
+          };
+        });
+      },
+      deleteRows: rowIndices => {
+        skipAutoResetPageIndex();
+        setRows(old => {
+          if (!old || !old.rows) return old;
+
+          // Map visible indices to actual global indices when filtering errors
+          const actualIndices = rowIndices.map(idx =>
+            showErrors ? (groupedErrors?.[idx]?.row ?? idx) : idx
+          );
+
+          // Filter out deleted rows and adjust indices in errors/changes
+          const newRows = old.rows.filter(
+            (_, idx) => !actualIndices.includes(idx)
+          );
+
+          // Create index mapping for remaining rows
+          const indexMap = new Map<number, number>();
+          let newIndex = 0;
+          for (let i = 0; i < old.rows.length; i++) {
+            if (!actualIndices.includes(i)) {
+              indexMap.set(i, newIndex++);
+            }
+          }
+
+          // Update errors with new indices, filter out deleted rows
+          const newErrors = (old.errors ?? [])
+            .filter(e => !actualIndices.includes(e.row))
+            .map(e => ({ ...e, row: indexMap.get(e.row) ?? e.row }));
+
+          // Update changes with new indices, filter out deleted rows
+          const newChanges = (old.changes ?? [])
+            .filter(c => !actualIndices.includes(c.row))
+            .map(c => ({ ...c, row: indexMap.get(c.row) ?? c.row }));
+
+          // Update grouped state
+          setGroupedErrors(groupErrorsByRow(newErrors));
+          setGroupedChanges(groupChangesByRow(newChanges));
+          setSelectedRows({});
+
+          return {
+            rows: newRows,
+            errors: newErrors,
+            changes: newChanges,
+          };
+        });
+      },
+      duplicateRow: rowIndex => {
+        skipAutoResetPageIndex();
+        setRows(old => {
+          if (!old || !old.rows) return old;
+
+          // Map visible rowIndex to actual global row when filtering errors
+          const actualRowIndex = showErrors
+            ? (groupedErrors?.[rowIndex]?.row ?? rowIndex)
+            : rowIndex;
+
+          const rowToDuplicate = old.rows[actualRowIndex];
+          if (!rowToDuplicate) return old;
+
+          const duplicatedRowIndex = actualRowIndex + 1;
+
+          // Insert duplicate right after the original
+          const newRows = [
+            ...old.rows.slice(0, actualRowIndex + 1),
+            { ...rowToDuplicate },
+            ...old.rows.slice(actualRowIndex + 1),
+          ];
+
+          // Adjust indices in errors/changes for rows after insertion point
+          const newErrors = (old.errors ?? []).map(e => ({
+            ...e,
+            row: e.row > actualRowIndex ? e.row + 1 : e.row,
+          }));
+
+          const newChanges = (old.changes ?? []).map(c => ({
+            ...c,
+            row: c.row > actualRowIndex ? c.row + 1 : c.row,
+          }));
+
+          // Validate and update the duplicated row
+          validateAndUpdateRow(rowToDuplicate, duplicatedRowIndex, "add");
+
+          // Update grouped state with current data (before async validation)
+          setGroupedErrors(groupErrorsByRow(newErrors));
+          setGroupedChanges(groupChangesByRow(newChanges));
+
+          return {
+            rows: newRows,
+            errors: newErrors,
+            changes: newChanges,
           };
         });
       },
@@ -296,26 +450,6 @@ export default function DataPreview({
     },
   });
 
-  // fixed column widths based on content type
-  const getColumnWidth = (header: string) => {
-    if (header.includes("email")) return 200;
-    if (
-      header.includes("language") ||
-      header.includes("country") ||
-      header === "_row" ||
-      header === "#"
-    )
-      return 80;
-    if (
-      header.toLowerCase().includes("name") ||
-      header.toLowerCase().includes("id") ||
-      header.toLowerCase().includes("date") ||
-      header.toLowerCase().includes("phone")
-    )
-      return 120;
-    return 150; // default width
-  };
-
   const headerGroups = table.getHeaderGroups();
 
   return (
@@ -326,7 +460,7 @@ export default function DataPreview({
         <div className="mt-2 flex flex-row justify-between">
           <div className="flex items-center gap-2">
             <Button
-              variant="outline"
+              variant="default"
               onClick={() => {
                 if (!errorTargetList.length) return;
                 const target = errorTargetList[currentErrorIndex]!;
@@ -340,20 +474,49 @@ export default function DataPreview({
             >
               Find Errors
             </Button>
-            <Button
-              variant={!showErrors ? "default" : "secondary"}
-              onClick={() => setShowErrors(false)}
-              disabled={!validationProgress?.isComplete}
+            <Tabs
+              value={showErrors ? "errors" : "all"}
+              onValueChange={value => setShowErrors(value === "errors")}
             >
-              All Rows
-            </Button>
-            <Button
-              variant={showErrors ? "destructive" : "secondary"}
-              onClick={() => setShowErrors(true)}
-              disabled={!validationProgress?.isComplete}
-            >
-              {`Errors Only (${rows?.errors?.length ?? 0})`}
-            </Button>
+              <TabsList>
+                <TabsTrigger
+                  value="all"
+                  disabled={!validationProgress?.isComplete}
+                >
+                  All Rows
+                </TabsTrigger>
+                <TabsTrigger
+                  value="errors"
+                  disabled={!validationProgress?.isComplete}
+                >
+                  {`Errors Only (${rows?.errors?.length ?? 0})`}
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+            {Object.keys(selectedRows).length > 0 && (
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  const selected = Object.keys(selectedRows).map(Number);
+                  table.options.meta?.deleteRows?.(selected);
+                }}
+              >
+                <DeleteIcon />
+                <Typography as="span">Delete</Typography>
+              </Button>
+            )}
+            {Object.keys(selectedRows).length === 1 && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const selected = Object.keys(selectedRows).map(Number)[0];
+                  table.options.meta?.duplicateRow?.(selected);
+                }}
+              >
+                <CopyIcon />
+                <Typography as="span">Duplicate</Typography>
+              </Button>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => {}}>
@@ -401,7 +564,7 @@ export default function DataPreview({
                                     header.column.columnDef.header,
                                     header.getContext()
                                   )}
-                              {header.column.columnDef.header !== "#" && (
+                              {header.column.columnDef.id !== "_row" && (
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <InfoIcon className="w-4 h-4" />
