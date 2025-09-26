@@ -41,13 +41,7 @@ import {
   groupChangesByRow,
   getColumnWidth,
 } from "../lib/utils";
-import {
-  FileSearchIcon,
-  DownloadIcon,
-  InfoIcon,
-  DeleteIcon,
-  CopyIcon,
-} from "lucide-react";
+import { FileSearchIcon, InfoIcon, DeleteIcon, CopyIcon } from "lucide-react";
 import { fields } from "../localisation/fields";
 import EditableSelect from "./ui/editableSelect";
 import EditableCell from "./ui/editableCell";
@@ -55,7 +49,8 @@ import useSkipper from "../hooks/useSkipper";
 import useFindError from "../hooks/useFindError";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 import { Checkbox } from "./ui/checkbox";
-
+import DownloadDialog from "./ui/downloadDialog";
+import { downloadFile } from "../lib/workerClient";
 interface DataPreviewProps {
   fileData: FileParseResult;
   mappings: Record<string, keyof User>;
@@ -522,9 +517,11 @@ export default function DataPreview({
             <Button variant="outline" onClick={() => {}}>
               <FileSearchIcon />
             </Button>
-            <Button variant="outline" onClick={() => {}}>
-              <DownloadIcon />
-            </Button>
+            <DownloadDialog
+              onDownload={(fileName: string, format: string) => {
+                downloadFile(rows?.rows ?? [], fileName, format);
+              }}
+            />
           </div>
         </div>
         {!validationProgress?.isComplete ? (

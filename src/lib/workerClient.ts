@@ -10,6 +10,11 @@ type Api = {
     sheetNames?: string[]
   ): Promise<FileParseResult>;
   getFileSheetNames(file: File): Promise<string[]>;
+  downloadFile(
+    rows: Record<string, any>[],
+    fileName: string,
+    format: string
+  ): Promise<{ buffer: ArrayBuffer; type: string; filename: string }>;
 };
 
 let remotePromise: Promise<Remote<Api>> | null = null;
@@ -70,4 +75,29 @@ export async function parseFileOptimized(file: File, sheetNames?: string[]) {
 export async function getFileSheetNames(file: File) {
   const remote = await getRemote();
   return remote.getFileSheetNames(file);
+}
+
+export async function downloadFile(
+  rows: Record<string, any>[],
+  fileName: string,
+  format: string
+) {
+  const remote = await getRemote();
+  const { buffer, type, filename } = await remote.downloadFile(
+    rows,
+    fileName,
+    format
+  );
+
+  const blob = new Blob([buffer], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 100);
 }

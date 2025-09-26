@@ -49,6 +49,13 @@ const api = {
     }
     throw new Error(`Unsupported file type: ${name}`);
   },
+  async downloadFile(
+    rows: Record<string, any>[],
+    fileName: string,
+    format: string
+  ) {
+    return downloadFile(rows, fileName, format);
+  },
 };
 
 function parseExcelSheet(workBook: WorkBook, sheetNames: string[]) {
@@ -385,6 +392,46 @@ async function parseJSON(file: File): Promise<FileParseResult> {
     reader.onerror = () => reject(new Error("Failed to read JSON file"));
     reader.readAsText(file);
   });
+}
+
+async function downloadFile(
+  rows: Record<string, any>[],
+  fileName: string,
+  format: string
+): Promise<{ buffer: ArrayBuffer; type: string; filename: string }> {
+  console.log("downloadFile", fileName, format);
+  let blob: Blob;
+  let filename = `${fileName ? `${fileName}` : "export"}.${format}`;
+  if (format === "csv") {
+    // Use papaparse to convert to CSV
+    const csv = Papa.unparse(rows);
+    blob = new Blob([csv], { type: "text/csv" });
+  } else if (format === "json") {
+    blob = new Blob([JSON.stringify(rows, null, 2)], {
+      type: "application/json",
+    });
+  } else if (format === "xlsx") {
+    // Use xlsx to create a workbook and write to xlsx
+    const ws = utils.json_to_sheet(rows);
+    const wb = utils.book_new();
+    utils.book_append_sheet(wb, ws, "User Data");
+    const xlsxBuffer = writeXLSXBuffer(wb);
+    blob = new Blob([xlsxBuffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+  } else {
+    throw new Error(`Unsupported download format: ${format}`);
+  }
+
+  console.log("blob", blob);
+  const buffer = await blob.arrayBuffer();
+  return { buffer, type: blob.type, filename };
+
+  // Helper for xlsx buffer
+  function writeXLSXBuffer(wb: WorkBook): ArrayBuffer {
+    // xlsx.write returns a Uint8Array if type: "array"
+    return (read as any).write(wb, { bookType: "xlsx", type: "array" });
+  }
 }
 
 expose(api);
