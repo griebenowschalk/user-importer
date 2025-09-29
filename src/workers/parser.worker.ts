@@ -1,5 +1,5 @@
 import { FileParseResult } from "@/types";
-import { read, utils, WorkBook, ParsingOptions } from "xlsx";
+import { read, write, utils, WorkBook, ParsingOptions } from "xlsx";
 import Papa from "papaparse";
 import { expose } from "comlink";
 import { checkIfExcel } from "@/lib/utils";
@@ -411,10 +411,36 @@ async function downloadFile(
       type: "application/json",
     });
   } else if (format === "xlsx") {
-    // Use xlsx to create a workbook and write to xlsx
-    const ws = utils.json_to_sheet(rows);
+    // Large-file friendly XLSX: split across sheets within Excel row limits
+    const EXCEL_SHEET_ROW_LIMIT = 1048576; // Excel's hard limit per sheet
+    const PREFERRED_SHEET_ROWS = 200000; // pragmatic chunk size to reduce memory spikes
+
     const wb = utils.book_new();
-    utils.book_append_sheet(wb, ws, "User Data");
+    if (!rows || rows.length === 0) {
+      const emptyWs = utils.json_to_sheet([]);
+      utils.book_append_sheet(wb, emptyWs, "User Data");
+    } else {
+      const headers = Object.keys(rows[0] ?? {});
+      const safeChunkSize = Math.min(
+        PREFERRED_SHEET_ROWS,
+        EXCEL_SHEET_ROW_LIMIT - 1
+      );
+      for (
+        let start = 0, sheetIndex = 1;
+        start < rows.length;
+        start += safeChunkSize, sheetIndex++
+      ) {
+        const end = Math.min(start + safeChunkSize, rows.length);
+        const chunk = rows.slice(start, end);
+        const ws = utils.json_to_sheet(chunk, {
+          header: headers,
+          skipHeader: false,
+        });
+        const sheetName =
+          rows.length > safeChunkSize ? `User Data ${sheetIndex}` : "User Data";
+        utils.book_append_sheet(wb, ws, sheetName);
+      }
+    }
     const xlsxBuffer = writeXLSXBuffer(wb);
     blob = new Blob([xlsxBuffer], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -430,7 +456,7 @@ async function downloadFile(
   // Helper for xlsx buffer
   function writeXLSXBuffer(wb: WorkBook): ArrayBuffer {
     // xlsx.write returns a Uint8Array if type: "array"
-    return (read as any).write(wb, { bookType: "xlsx", type: "array" });
+    return write(wb, { bookType: "xlsx", type: "array" });
   }
 }
 
