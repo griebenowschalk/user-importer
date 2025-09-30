@@ -331,3 +331,15 @@ export const getColumnWidth = (header: string) => {
     return 120;
   return 150; // default width
 };
+
+// escape all regex special characters
+export const escapeRegex = (input: string) => {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
+
+// convert a string to a regex
+export const toRegex = (input: string) => {
+  const m = input.match(/^\/(.*)\/([gimsuy]*)$/);
+  if (!m) return new RegExp(escapeRegex(input), "i");
+  return new RegExp(m[1], m[2] || "g");
+};

@@ -399,7 +399,6 @@ async function downloadFile(
   fileName: string,
   format: string
 ): Promise<{ buffer: ArrayBuffer; type: string; filename: string }> {
-  console.log("downloadFile", fileName, format);
   let blob: Blob;
   let filename = `${fileName ? `${fileName}` : "export"}.${format}`;
   if (format === "csv") {
@@ -449,7 +448,6 @@ async function downloadFile(
     throw new Error(`Unsupported download format: ${format}`);
   }
 
-  console.log("blob", blob);
   const buffer = await blob.arrayBuffer();
   return { buffer, type: blob.type, filename };
 

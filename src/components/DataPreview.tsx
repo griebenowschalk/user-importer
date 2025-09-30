@@ -40,8 +40,9 @@ import {
   groupErrorsByRow,
   groupChangesByRow,
   getColumnWidth,
+  toRegex,
 } from "../lib/utils";
-import { FileSearchIcon, InfoIcon, DeleteIcon, CopyIcon } from "lucide-react";
+import { InfoIcon, DeleteIcon, CopyIcon } from "lucide-react";
 import { fields } from "../localisation/fields";
 import EditableSelect from "./ui/editableSelect";
 import EditableCell from "./ui/editableCell";
@@ -51,6 +52,7 @@ import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 import { Checkbox } from "./ui/checkbox";
 import DownloadDialog from "./ui/downloadDialog";
 import { downloadFile } from "../lib/workerClient";
+import { FindReplace } from "./ui/findReplace";
 interface DataPreviewProps {
   fileData: FileParseResult;
   mappings: Record<string, keyof User>;
@@ -95,6 +97,7 @@ export default function DataPreview({
   // Error navigation state/refs
   const cellRefs = useRef<Map<string, HTMLTableCellElement>>(new Map());
   const [focusedCell, setFocusedCell] = useState<HighlightCell | null>(null);
+  const [findMatches, setFindMatches] = useState<Set<string>>(new Set());
 
   const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(() => {
     const headers = fileData?.headers ?? [];
@@ -447,6 +450,34 @@ export default function DataPreview({
 
   const headerGroups = table.getHeaderGroups();
 
+  const handleFind = (params: { find: string; field: string }) => {
+    const { find, field } = params;
+    if (!find?.length || !field?.length) return;
+
+    const regex = toRegex(find);
+    const matches = new Set<string>();
+
+    // Work on the same data as the table currently in view
+    for (let i = 0; i < data.length; i++) {
+      if (field === "all") {
+        const keys = Object.keys(data[i] ?? {});
+        for (const key of keys) {
+          const value = data[i][key];
+          if (value != null && String(value).match(regex)) {
+            matches.add(`${i}:${key}`);
+          }
+        }
+      } else {
+        const value = data[i][field];
+        if (value != null && String(value).match(regex)) {
+          matches.add(`${i}:${field}`);
+        }
+      }
+    }
+
+    setFindMatches(matches);
+  };
+
   return (
     <TooltipProvider>
       <Container className="data-preview">
@@ -514,9 +545,10 @@ export default function DataPreview({
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => {}}>
-              <FileSearchIcon />
-            </Button>
+            <FindReplace
+              fields={rows?.rows[0] ? Object.keys(rows.rows[0]) : []}
+              onFind={handleFind}
+            />
             <DownloadDialog
               onDownload={(fileName: string, format: string) => {
                 downloadFile(rows?.rows ?? [], fileName, format);
@@ -613,6 +645,9 @@ export default function DataPreview({
                             (mappings as Record<string, string>)?.[
                               cell.column.id
                             ] ?? cell.column.id;
+                          const isFindMatch =
+                            !isRowNumber &&
+                            findMatches.has(`${row.index}:${targetFieldId}`);
                           const isError = isRowNumber
                             ? undefined
                             : getGroupedFieldError(
@@ -647,6 +682,7 @@ export default function DataPreview({
                               className={`px-3 py-2 border-b border-gray-300 text-left whitespace-nowrap overflow-hidden 
                               ${!isRowNumber && isChange && !isError ? "bg-blue-100" : ""} 
                               ${!isRowNumber && isError ? "bg-red-100" : ""} 
+                              ${!isRowNumber && !isError && !isChange && isFindMatch ? "bg-yellow-100" : ""} 
                               ${index !== columns.length - 1 ? "border-r" : ""}
                               ${
                                 focusedCell &&

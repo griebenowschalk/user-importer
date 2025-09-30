@@ -62,8 +62,8 @@ function DownloadDialog({ onDownload }: DownloadDialogProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline">
-          <DownloadIcon onClick={() => setOpen(true)} />
+        <Button variant="outline" onClick={() => setOpen(true)}>
+          <DownloadIcon />
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
