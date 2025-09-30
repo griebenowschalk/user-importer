@@ -1,23 +1,29 @@
 import type { rowHooks } from "../validation/schema";
 
-export interface User {
-  employeeId: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  startDate: string; // YYYY-MM-DD
-  department: string;
-  division: string;
-  position: string;
-  region: string;
-  mobileNumber: string;
-  workPhoneNumber?: string;
-  gender: string;
-  country: string; // ISO-3166-1 alpha-3
-  city: string;
-  dateOfBirth: string; // YYYY-MM-DD
-  language: string;
-}
+export const USER_KEYS = [
+  "employeeId",
+  "firstName",
+  "lastName",
+  "email",
+  "startDate",
+  "department",
+  "division",
+  "position",
+  "region",
+  "mobileNumber",
+  "workPhoneNumber",
+  "gender",
+  "country",
+  "city",
+  "dateOfBirth",
+  "language",
+] as const;
+
+export type User = {
+  [K in (typeof USER_KEYS)[number]]: K extends "workPhoneNumber"
+    ? string | undefined
+    : string;
+};
 
 export interface UserFieldMapping {
   [sourceColumn: string]: keyof User;

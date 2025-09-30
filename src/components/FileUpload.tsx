@@ -6,6 +6,8 @@ import { Button } from "./ui/button";
 import { Container } from "./ui/container";
 import { checkIfExcel } from "../lib/utils";
 import { Typography } from "./ui/typography";
+import { Download } from "lucide-react";
+import { downloadExcelTemplate, downloadCSVTemplate } from "@/lib/templates";
 
 interface FileUploadProps {
   onFileUploaded: (data: FileParseResult) => void;
@@ -60,9 +62,28 @@ export default function FileUpload({
     },
   });
 
+  const downloadTemplate = (format: string) => {
+    if (format === "excel") {
+      downloadExcelTemplate();
+      return;
+    }
+
+    downloadCSVTemplate();
+  };
+
   return (
     <Container>
       <Typography as="h2">Upload File</Typography>
+      <div className="flex items-center justify-end gap-2">
+        <Button onClick={() => downloadTemplate("excel")} variant="outline">
+          <Download />
+          Excel Template
+        </Button>
+        <Button onClick={() => downloadTemplate("csv")} variant="outline">
+          <Download />
+          CSV Template
+        </Button>
+      </div>
       <Typography as="p">
         Upload your CSV, Excel, or JSON file to get started
       </Typography>
