@@ -7,6 +7,8 @@ import {
   ColumnDef,
   type CellContext,
   RowSelectionState,
+  getSortedRowModel,
+  SortingState,
 } from "@tanstack/react-table";
 import { extractCleaningRules, userSchema } from "../validation/schema";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -42,7 +44,14 @@ import {
   getColumnWidth,
   toRegex,
 } from "../lib/utils";
-import { InfoIcon, DeleteIcon, CopyIcon } from "lucide-react";
+import {
+  InfoIcon,
+  DeleteIcon,
+  CopyIcon,
+  ArrowUpDownIcon,
+  ArrowDownIcon,
+  ArrowUpIcon,
+} from "lucide-react";
 import { fields } from "../localisation/fields";
 import EditableSelect from "./ui/editableSelect";
 import EditableCell from "./ui/editableCell";
@@ -98,6 +107,7 @@ export default function DataPreview({
   const cellRefs = useRef<Map<string, HTMLTableCellElement>>(new Map());
   const [focusedCell, setFocusedCell] = useState<HighlightCell | null>(null);
   const [findMatches, setFindMatches] = useState<Set<string>>(new Set());
+  const [sorting, setSorting] = useState<SortingState>([]);
 
   const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(() => {
     const headers = fileData?.headers ?? [];
@@ -105,6 +115,7 @@ export default function DataPreview({
 
     const numberCol: ColumnDef<Record<string, unknown>> = {
       id: "_row",
+      enableSorting: false,
       header: ({ table }) => (
         <div className="flex items-center gap-2 justify-center">
           <Typography as="span">#</Typography>
@@ -155,6 +166,7 @@ export default function DataPreview({
       return {
         id: sourceHeader,
         header: mapped ? mapped : sourceHeader,
+        enableSorting: true,
         accessorKey: mapped ? mapped : sourceHeader, // Use target field for data access
         cell: hasOptions
           ? (ctx: CellContext<Record<string, unknown>, unknown>) => (
@@ -268,10 +280,13 @@ export default function DataPreview({
     columns,
     getCoreRowModel: getCoreRowModel(),
     autoResetPageIndex,
+    getSortedRowModel: getSortedRowModel(),
+    onSortingChange: setSorting,
     enableMultiRowSelection: true,
     onRowSelectionChange: setSelectedRows,
     state: {
       rowSelection: selectedRows,
+      sorting,
     },
     meta: {
       updateData: (rowIndex, columnId, value) => {
@@ -586,28 +601,61 @@ export default function DataPreview({
                                 : ""
                             }`}
                           >
-                            <span className="block w-full truncate flex items-center gap-2">
-                              {header.isPlaceholder
-                                ? null
-                                : flexRender(
-                                    header.column.columnDef.header,
-                                    header.getContext()
-                                  )}
-                              {header.column.columnDef.id !== "_row" && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <InfoIcon className="w-4 h-4" />
-                                  </TooltipTrigger>
-                                  <TooltipContent className="whitespace-pre-line max-w-[300px]">
-                                    {
-                                      fields[
-                                        `${header.column.columnDef.header}_description` as keyof typeof fields
-                                      ]
-                                    }
-                                  </TooltipContent>
-                                </Tooltip>
-                              )}
-                            </span>
+                            {(() => {
+                              const canSort = header.column.getCanSort();
+                              const common =
+                                "block w-full truncate flex justify-between items-center gap-2";
+                              const content = (
+                                <>
+                                  {header.isPlaceholder
+                                    ? null
+                                    : flexRender(
+                                        header.column.columnDef.header,
+                                        header.getContext()
+                                      )}
+                                  <span className="flex items-center gap-2">
+                                    {canSort && (
+                                      <>
+                                        {header.column.getIsSorted() ===
+                                        "asc" ? (
+                                          <ArrowUpIcon className="w-4 h-4" />
+                                        ) : header.column.getIsSorted() ===
+                                          "desc" ? (
+                                          <ArrowDownIcon className="w-4 h-4" />
+                                        ) : (
+                                          <ArrowUpDownIcon className="w-4 h-4" />
+                                        )}
+                                      </>
+                                    )}
+                                    {header.column.columnDef.id !== "_row" && (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <InfoIcon className="w-4 h-4" />
+                                        </TooltipTrigger>
+                                        <TooltipContent className="whitespace-pre-line max-w-[300px]">
+                                          {
+                                            fields[
+                                              `${header.column.columnDef.header}_description` as keyof typeof fields
+                                            ]
+                                          }
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    )}
+                                  </span>
+                                </>
+                              );
+                              return canSort ? (
+                                <button
+                                  type="button"
+                                  onClick={header.column.getToggleSortingHandler()}
+                                  className={common}
+                                >
+                                  {content}
+                                </button>
+                              ) : (
+                                <div className={common}>{content}</div>
+                              );
+                            })()}
                           </th>
                         );
                       })}
