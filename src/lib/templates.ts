@@ -37,6 +37,15 @@ export const downloadExcelTemplate = (filename = "user-template.xlsx") => {
     ws[addr] = cell;
   });
 
+  const colWidths = headers.map(h => {
+    if (h.toLowerCase().includes("email")) return { wch: 30 };
+    if (/(phone|mobile)/i.test(h)) return { wch: 18 };
+    if (/(date|id)/i.test(h)) return { wch: 16 };
+    if (/(country|language|city|gender)/i.test(h)) return { wch: 14 };
+    return { wch: 20 };
+  });
+  (ws as any)["!cols"] = colWidths;
+
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Users");
 

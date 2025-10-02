@@ -13,13 +13,12 @@ import {
 import { extractCleaningRules, userSchema } from "../validation/schema";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
-  FileParseResult,
-  User,
   ValidationProgress,
   CleaningResult,
-  ValidationError,
   GroupedRowError,
   GroupedRowChange,
+  DataPreviewProps,
+  HighlightCell,
 } from "@/types";
 import { Typography } from "./ui/typography";
 import { Button } from "./ui/button";
@@ -51,6 +50,8 @@ import {
   ArrowUpDownIcon,
   ArrowDownIcon,
   ArrowUpIcon,
+  UndoIcon,
+  RedoIcon,
 } from "lucide-react";
 import { fields } from "../localisation/fields";
 import EditableSelect from "./ui/editableSelect";
@@ -62,17 +63,7 @@ import { Checkbox } from "./ui/checkbox";
 import DownloadDialog from "./ui/downloadDialog";
 import { downloadFile } from "../lib/workerClient";
 import { FindReplace } from "./ui/findReplace";
-interface DataPreviewProps {
-  fileData: FileParseResult;
-  mappings: Record<string, keyof User>;
-  onNext: (validatedData: { valid: any[]; errors: ValidationError[] }) => void;
-  onBack: () => void;
-}
-
-type HighlightCell = {
-  rowIndex: number;
-  colId: string;
-};
+import { useTableHistory } from "../hooks/useTableHistory";
 
 declare module "@tanstack/react-table" {
   interface TableMeta<TData extends RowData> {
@@ -108,6 +99,16 @@ export default function DataPreview({
   const [focusedCell, setFocusedCell] = useState<HighlightCell | null>(null);
   const [findMatches, setFindMatches] = useState<Set<string>>(new Set());
   const [sorting, setSorting] = useState<SortingState>([]);
+
+  const { undo, redo, canUndo, canRedo, getTableState, pushHistory } =
+    useTableHistory(
+      rows,
+      groupedErrors,
+      groupedChanges,
+      setRows,
+      setGroupedErrors,
+      setGroupedChanges
+    );
 
   const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(() => {
     const headers = fileData?.headers ?? [];
@@ -224,7 +225,9 @@ export default function DataPreview({
   const validateAndUpdateRow = async (
     rowData: Record<string, unknown>,
     targetRowIndex: number,
-    mode: "replace" | "add"
+    mode: "replace" | "add",
+    label?: string,
+    options?: { pushHistory?: boolean }
   ) => {
     try {
       const chunk = await validateChunkOptimized(
@@ -232,6 +235,8 @@ export default function DataPreview({
         targetRowIndex,
         mappings
       );
+
+      const prevState = getTableState()!;
 
       setRows(current => {
         if (!current) return current;
@@ -260,9 +265,12 @@ export default function DataPreview({
           newChanges = current.changes.concat(chunk.changes);
         }
 
+        const nextGroupedErrors = groupErrorsByRow(newErrors);
+        const nextGroupedChanges = groupChangesByRow(newChanges);
+
         // Update grouped state
-        setGroupedErrors(groupErrorsByRow(newErrors));
-        setGroupedChanges(groupChangesByRow(newChanges));
+        setGroupedErrors(nextGroupedErrors);
+        setGroupedChanges(nextGroupedChanges);
 
         return {
           rows: mergedRows,
@@ -270,6 +278,15 @@ export default function DataPreview({
           changes: newChanges,
         };
       });
+
+      const nextState = getTableState()!;
+      if (options?.pushHistory !== false) {
+        pushHistory(
+          label ?? `Edit row ${targetRowIndex + 1}`,
+          prevState,
+          nextState
+        );
+      }
     } catch (err) {
       console.error(`Row validation failed (${mode}):`, err);
     }
@@ -292,131 +309,133 @@ export default function DataPreview({
       updateData: (rowIndex, columnId, value) => {
         // Skip page index reset until after next rerender
         skipAutoResetPageIndex();
-        setRows(old => {
-          if (!old || !old.rows) return old;
+        const actualRowIndex = showErrors
+          ? (groupedErrors?.[rowIndex]?.row ?? rowIndex)
+          : rowIndex;
 
-          // Map visible rowIndex to actual global row when filtering errors
-          const actualRowIndex = showErrors
-            ? (groupedErrors?.[rowIndex]?.row ?? rowIndex)
-            : rowIndex;
+        const updatedRawRow = {
+          ...fileData.rows[actualRowIndex],
+          [columnId]: value,
+        };
 
-          const updatedRows = old.rows.map((row, index) => {
-            if (index === actualRowIndex) {
-              return {
-                ...row,
-                [columnId]: value,
-              };
-            }
-            return row;
-          });
-
-          // Create updated raw row from file data
-          const updatedRawRow = {
-            ...fileData.rows[actualRowIndex],
-            [columnId]: value,
-          };
-
-          // Validate and update the modified row
-          validateAndUpdateRow(updatedRawRow, actualRowIndex, "replace");
-
-          return {
-            ...old,
-            rows: updatedRows,
-          };
-        });
+        validateAndUpdateRow(
+          updatedRawRow,
+          actualRowIndex,
+          "replace",
+          `Edit row ${actualRowIndex + 1} in column ${columnId}`
+        );
       },
       deleteRows: rowIndices => {
         skipAutoResetPageIndex();
-        setRows(old => {
-          if (!old || !old.rows) return old;
+        // Take a stable snapshot BEFORE computing next
+        const prevState = getTableState()!;
 
-          // Map visible indices to actual global indices when filtering errors
-          const actualIndices = rowIndices.map(idx =>
-            showErrors ? (groupedErrors?.[idx]?.row ?? idx) : idx
-          );
+        if (!rows || !rows.rows) return;
 
-          // Filter out deleted rows and adjust indices in errors/changes
-          const newRows = old.rows.filter(
-            (_, idx) => !actualIndices.includes(idx)
-          );
+        // Map visible indices to actual global indices when filtering errors
+        const actualIndices = rowIndices
+          .map(idx => (showErrors ? (groupedErrors?.[idx]?.row ?? idx) : idx))
+          .sort((a, b) => a - b);
 
-          // Create index mapping for remaining rows
-          const indexMap = new Map<number, number>();
-          let newIndex = 0;
-          for (let i = 0; i < old.rows.length; i++) {
-            if (!actualIndices.includes(i)) {
-              indexMap.set(i, newIndex++);
-            }
+        // Filter out deleted rows and adjust indices in errors/changes
+        const newRows = rows.rows.filter(
+          (_, idx) => !actualIndices.includes(idx)
+        );
+
+        // Create index mapping for remaining rows
+        const indexMap = new Map<number, number>();
+        let newIndex = 0;
+        for (let i = 0; i < rows.rows.length; i++) {
+          if (!actualIndices.includes(i)) {
+            indexMap.set(i, newIndex++);
           }
+        }
 
-          // Update errors with new indices, filter out deleted rows
-          const newErrors = (old.errors ?? [])
-            .filter(e => !actualIndices.includes(e.row))
-            .map(e => ({ ...e, row: indexMap.get(e.row) ?? e.row }));
+        // Update errors with new indices, filter out deleted rows
+        const newErrors = (rows.errors ?? [])
+          .filter(e => !actualIndices.includes(e.row))
+          .map(e => ({ ...e, row: indexMap.get(e.row) ?? e.row }));
 
-          // Update changes with new indices, filter out deleted rows
-          const newChanges = (old.changes ?? [])
-            .filter(c => !actualIndices.includes(c.row))
-            .map(c => ({ ...c, row: indexMap.get(c.row) ?? c.row }));
+        // Update changes with new indices, filter out deleted rows
+        const newChanges = (rows.changes ?? [])
+          .filter(c => !actualIndices.includes(c.row))
+          .map(c => ({ ...c, row: indexMap.get(c.row) ?? c.row }));
 
-          // Update grouped state
-          setGroupedErrors(groupErrorsByRow(newErrors));
-          setGroupedChanges(groupChangesByRow(newChanges));
-          setSelectedRows({});
+        const nextGroupedErrors = groupErrorsByRow(newErrors);
+        const nextGroupedChanges = groupChangesByRow(newChanges);
 
-          return {
-            rows: newRows,
-            errors: newErrors,
-            changes: newChanges,
-          };
+        // Apply state changes without using a functional updater (avoids StrictMode double-invoke side effects)
+        setRows({ rows: newRows, errors: newErrors, changes: newChanges });
+        setGroupedErrors(nextGroupedErrors);
+        setGroupedChanges(nextGroupedChanges);
+        setSelectedRows({});
+
+        // Push a single history entry after state updates are scheduled
+        pushHistory(`Delete rows ${actualIndices.join(", ")}`, prevState, {
+          rows: newRows,
+          errors: newErrors,
+          changes: newChanges,
+          groupedErrors: nextGroupedErrors,
+          groupedChanges: nextGroupedChanges,
         });
       },
       duplicateRow: rowIndex => {
         skipAutoResetPageIndex();
-        setRows(old => {
-          if (!old || !old.rows) return old;
+        // Stable snapshot before computing
+        const prevState = getTableState()!;
+        if (!rows || !rows.rows) return;
 
-          // Map visible rowIndex to actual global row when filtering errors
-          const actualRowIndex = showErrors
-            ? (groupedErrors?.[rowIndex]?.row ?? rowIndex)
-            : rowIndex;
+        const actualRowIndex = showErrors
+          ? (groupedErrors?.[rowIndex]?.row ?? rowIndex)
+          : rowIndex;
 
-          const rowToDuplicate = old.rows[actualRowIndex];
-          if (!rowToDuplicate) return old;
+        const rowToDuplicate = rows.rows[actualRowIndex];
+        if (!rowToDuplicate) return;
 
-          const duplicatedRowIndex = actualRowIndex + 1;
+        const duplicatedRowIndex = actualRowIndex + 1;
 
-          // Insert duplicate right after the original
-          const newRows = [
-            ...old.rows.slice(0, actualRowIndex + 1),
-            { ...rowToDuplicate },
-            ...old.rows.slice(actualRowIndex + 1),
-          ];
+        const newRows = [
+          ...rows.rows.slice(0, actualRowIndex + 1),
+          { ...rowToDuplicate },
+          ...rows.rows.slice(actualRowIndex + 1),
+        ];
 
-          // Adjust indices in errors/changes for rows after insertion point
-          const newErrors = (old.errors ?? []).map(e => ({
-            ...e,
-            row: e.row > actualRowIndex ? e.row + 1 : e.row,
-          }));
+        const newErrors = (rows.errors ?? []).map(e => ({
+          ...e,
+          row: e.row > actualRowIndex ? e.row + 1 : e.row,
+        }));
+        const newChanges = (rows.changes ?? []).map(c => ({
+          ...c,
+          row: c.row > actualRowIndex ? c.row + 1 : c.row,
+        }));
 
-          const newChanges = (old.changes ?? []).map(c => ({
-            ...c,
-            row: c.row > actualRowIndex ? c.row + 1 : c.row,
-          }));
+        const nextGroupedErrors = groupErrorsByRow(newErrors);
+        const nextGroupedChanges = groupChangesByRow(newChanges);
 
-          // Validate and update the duplicated row
-          validateAndUpdateRow(rowToDuplicate, duplicatedRowIndex, "add");
+        // Apply state
+        setRows({ rows: newRows, errors: newErrors, changes: newChanges });
+        setGroupedErrors(nextGroupedErrors);
+        setGroupedChanges(nextGroupedChanges);
 
-          // Update grouped state with current data (before async validation)
-          setGroupedErrors(groupErrorsByRow(newErrors));
-          setGroupedChanges(groupChangesByRow(newChanges));
-
-          return {
-            rows: newRows,
-            errors: newErrors,
-            changes: newChanges,
-          };
+        // Single history entry for the structural duplicate
+        pushHistory(`Duplicate row ${actualRowIndex + 1}`, prevState, {
+          rows: newRows,
+          errors: newErrors,
+          changes: newChanges,
+          groupedErrors: nextGroupedErrors,
+          groupedChanges: nextGroupedChanges,
         });
+
+        // Validate duplicated row WITHOUT pushing another history entry
+        void (async () => {
+          await validateAndUpdateRow(
+            rowToDuplicate,
+            duplicatedRowIndex,
+            "add",
+            undefined,
+            { pushHistory: false }
+          );
+        })();
       },
       // Track which cell is currently focused for visual outline
       setFocusedCell: (rowIndex, columnId) => {
@@ -560,6 +579,20 @@ export default function DataPreview({
             )}
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              disabled={!canUndo}
+              variant="outline"
+              onClick={() => undo()}
+            >
+              <UndoIcon />
+            </Button>
+            <Button
+              disabled={!canRedo}
+              variant="outline"
+              onClick={() => redo()}
+            >
+              <RedoIcon />
+            </Button>
             <FindReplace
               fields={rows?.rows[0] ? Object.keys(rows.rows[0]) : []}
               onFind={handleFind}

@@ -202,3 +202,26 @@ export interface PipelineOptions {
   enableStreaming?: boolean;
   strategy?: "immediate" | "streaming" | "worker";
 }
+
+export type TableState = CleaningResult & {
+  groupedErrors: GroupedRowError[];
+  groupedChanges: GroupedRowChange[];
+};
+
+export type HistoryEntry = {
+  label: string;
+  prev: TableState;
+  next: TableState;
+};
+
+export interface DataPreviewProps {
+  fileData: FileParseResult;
+  mappings: Record<string, keyof User>;
+  onNext: (validatedData: { valid: any[]; errors: ValidationError[] }) => void;
+  onBack: () => void;
+}
+
+export type HighlightCell = {
+  rowIndex: number;
+  colId: string;
+};
