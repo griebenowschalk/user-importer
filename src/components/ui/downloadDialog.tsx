@@ -24,6 +24,7 @@ import { useForm } from "react-hook-form";
 import * as yup from "yup";
 import { Input } from "./input";
 import { useState } from "react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip";
 
 interface DownloadDialogProps {
   onDownload: (fileName: string, format: string) => void;
@@ -62,9 +63,14 @@ function DownloadDialog({ onDownload }: DownloadDialogProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" onClick={() => setOpen(true)}>
-          <DownloadIcon />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="outline" onClick={() => setOpen(true)}>
+              <DownloadIcon />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{"Export data to a file"}</TooltipContent>
+        </Tooltip>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">

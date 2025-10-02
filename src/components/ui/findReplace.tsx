@@ -8,6 +8,7 @@ import { FileSearchIcon } from "lucide-react";
 import { useState } from "react";
 import { Typography } from "./typography";
 import { Input } from "./input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip";
 import {
   Select,
   SelectContent,
@@ -21,11 +22,7 @@ import * as yup from "yup";
 
 interface FindReplaceProps {
   fields: string[];
-  onFind: (data: {
-    find: string;
-    field: string;
-    replace?: string | null;
-  }) => void;
+  onFind: (data: { find: string; field: string; replace?: string }) => void;
 }
 
 export function FindReplace({ fields, onFind }: FindReplaceProps) {
@@ -33,13 +30,13 @@ export function FindReplace({ fields, onFind }: FindReplaceProps) {
   const schema = yup.object({
     find: yup.string().required(),
     field: yup.string().required(),
-    replace: yup.string().optional().nullable(),
+    replace: yup.string().optional(),
   });
 
   const form = useForm<{
     find: string;
     field: string;
-    replace?: string | null;
+    replace?: string;
   }>({
     resolver: async data => {
       try {
@@ -59,25 +56,24 @@ export function FindReplace({ fields, onFind }: FindReplaceProps) {
     defaultValues: {
       find: "",
       field: "all",
-      replace: "",
+      replace: undefined,
     },
   });
 
-  const handleSubmit = (data: {
-    find: string;
-    field: string;
-    replace?: string | null;
-  }) => {
-    onFind(data);
-  };
-
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" onClick={() => setOpen(!open)}>
-          <FileSearchIcon />
-        </Button>
-      </PopoverTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button variant="outline">
+              <FileSearchIcon />
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent className="whitespace-pre-line max-w-[300px]">
+          {"Find and replace text in the table"}
+        </TooltipContent>
+      </Tooltip>
       <PopoverContent side="top" align="end" className="w-80">
         <div className="flex flex-col gap-2">
           <div className="space-y-2">
@@ -90,7 +86,7 @@ export function FindReplace({ fields, onFind }: FindReplaceProps) {
           </div>
           <form
             className="flex flex-col gap-2"
-            onSubmit={form.handleSubmit(handleSubmit)}
+            onSubmit={form.handleSubmit(onFind)}
           >
             <div className="flex flex-col gap-1">
               <div className="flex flex-col gap-1">

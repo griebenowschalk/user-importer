@@ -381,60 +381,67 @@ export default function DataPreview({
       },
       duplicateRow: rowIndex => {
         skipAutoResetPageIndex();
-        // Stable snapshot before computing
-        const prevState = getTableState()!;
-        if (!rows || !rows.rows) return;
+        (async () => {
+          const prevState = getTableState()!;
+          if (!rows || !rows.rows) return;
 
-        const actualRowIndex = showErrors
-          ? (groupedErrors?.[rowIndex]?.row ?? rowIndex)
-          : rowIndex;
+          const actualRowIndex = showErrors
+            ? (groupedErrors?.[rowIndex]?.row ?? rowIndex)
+            : rowIndex;
 
-        const rowToDuplicate = rows.rows[actualRowIndex];
-        if (!rowToDuplicate) return;
+          const rowToDuplicate = rows.rows[actualRowIndex];
+          if (!rowToDuplicate) return;
 
-        const duplicatedRowIndex = actualRowIndex + 1;
+          const duplicatedRowIndex = actualRowIndex + 1;
 
-        const newRows = [
-          ...rows.rows.slice(0, actualRowIndex + 1),
-          { ...rowToDuplicate },
-          ...rows.rows.slice(actualRowIndex + 1),
-        ];
+          try {
+            // Validate the duplicated row first
+            const chunk = await validateChunkOptimized(
+              [rowToDuplicate],
+              duplicatedRowIndex,
+              mappings
+            );
 
-        const newErrors = (rows.errors ?? []).map(e => ({
-          ...e,
-          row: e.row > actualRowIndex ? e.row + 1 : e.row,
-        }));
-        const newChanges = (rows.changes ?? []).map(c => ({
-          ...c,
-          row: c.row > actualRowIndex ? c.row + 1 : c.row,
-        }));
+            const validatedRow = chunk.rows[0] ?? rowToDuplicate;
 
-        const nextGroupedErrors = groupErrorsByRow(newErrors);
-        const nextGroupedChanges = groupChangesByRow(newChanges);
+            // Shift existing indices and append validation results
+            const shiftedErrors = (rows.errors ?? []).map(e => ({
+              ...e,
+              row: e.row >= duplicatedRowIndex ? e.row + 1 : e.row,
+            }));
+            const shiftedChanges = (rows.changes ?? []).map(c => ({
+              ...c,
+              row: c.row >= duplicatedRowIndex ? c.row + 1 : c.row,
+            }));
 
-        // Apply state
-        setRows({ rows: newRows, errors: newErrors, changes: newChanges });
-        setGroupedErrors(nextGroupedErrors);
-        setGroupedChanges(nextGroupedChanges);
+            const newRows = [
+              ...rows.rows.slice(0, duplicatedRowIndex),
+              validatedRow,
+              ...rows.rows.slice(duplicatedRowIndex),
+            ];
 
-        // Single history entry for the structural duplicate
-        pushHistory(`Duplicate row ${actualRowIndex + 1}`, prevState, {
-          rows: newRows,
-          errors: newErrors,
-          changes: newChanges,
-          groupedErrors: nextGroupedErrors,
-          groupedChanges: nextGroupedChanges,
-        });
+            const newErrors = shiftedErrors.concat(chunk.errors);
+            const newChanges = shiftedChanges.concat(chunk.changes);
 
-        // Validate duplicated row WITHOUT pushing another history entry
-        void (async () => {
-          await validateAndUpdateRow(
-            rowToDuplicate,
-            duplicatedRowIndex,
-            "add",
-            undefined,
-            { pushHistory: false }
-          );
+            const nextGroupedErrors = groupErrorsByRow(newErrors);
+            const nextGroupedChanges = groupChangesByRow(newChanges);
+
+            // Apply and push as one action
+            setRows({ rows: newRows, errors: newErrors, changes: newChanges });
+            setGroupedErrors(nextGroupedErrors);
+            setGroupedChanges(nextGroupedChanges);
+            setSelectedRows({});
+
+            pushHistory(`Duplicate row ${actualRowIndex + 1}`, prevState, {
+              rows: newRows,
+              errors: newErrors,
+              changes: newChanges,
+              groupedErrors: nextGroupedErrors,
+              groupedChanges: nextGroupedChanges,
+            });
+          } catch (err) {
+            console.error("Row validation failed (duplicate):", err);
+          }
         })();
       },
       // Track which cell is currently focused for visual outline
@@ -484,9 +491,70 @@ export default function DataPreview({
 
   const headerGroups = table.getHeaderGroups();
 
-  const handleFind = (params: { find: string; field: string }) => {
-    const { find, field } = params;
+  // Find And Replace
+  const handleBulkFindReplace = (params: {
+    find: string;
+    field: string;
+    replace: string;
+  }) => {
+    const { find, field, replace } = params;
+    const base = toRegex(find);
+    const regex = base.flags.includes("g")
+      ? base
+      : new RegExp(base, `${base.flags}g`);
+
+    const byRow = new Map<number, Record<string, unknown>>();
+    const affectedRows = new Set<number>();
+
+    for (let i = 0; i < data.length; i++) {
+      const actualRowIndex = showErrors ? (groupedErrors?.[i]?.row ?? i) : i;
+      const rowObj = data[i] ?? {};
+      const keys = field === "all" ? Object.keys(rowObj) : [field];
+
+      let mutated = false;
+      const raw = byRow.get(actualRowIndex) ?? {
+        ...fileData.rows[actualRowIndex],
+      };
+
+      // Loop through all keys in the row and check if they match the regex
+      // If they do, and will be changed by applying the replace string,
+      // then we add the row to the affectedRows set and the byRow map
+      for (const key of keys) {
+        const value = rowObj[key];
+        const stringValue = String(value);
+        if (value != null && regex.test(stringValue)) {
+          regex.lastIndex = 0;
+          const next = stringValue.replace(regex, replace ?? "");
+
+          if (next !== stringValue) {
+            mutated = true;
+            (affectedRows as any)[key] = next;
+          }
+        }
+      }
+
+      if (mutated) {
+        byRow.set(actualRowIndex, raw);
+        affectedRows.add(actualRowIndex);
+      }
+    }
+
+    if (byRow.size === 0) return;
+  };
+
+  const handleFind = async (params: {
+    find: string;
+    field: string;
+    replace?: string;
+  }) => {
+    const { find, field, replace } = params;
     if (!find?.length || !field?.length) return;
+
+    if (replace && replace.length > 0) {
+      await handleBulkFindReplace({ find, field, replace });
+      setFindMatches(new Set<string>());
+      return;
+    }
 
     const regex = toRegex(find);
     const matches = new Set<string>();
@@ -579,20 +647,34 @@ export default function DataPreview({
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              disabled={!canUndo}
-              variant="outline"
-              onClick={() => undo()}
-            >
-              <UndoIcon />
-            </Button>
-            <Button
-              disabled={!canRedo}
-              variant="outline"
-              onClick={() => redo()}
-            >
-              <RedoIcon />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  disabled={!canUndo}
+                  variant="outline"
+                  onClick={() => undo()}
+                >
+                  <UndoIcon />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="whitespace-pre-line max-w-[300px]">
+                {"Undo last action"}
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  disabled={!canRedo}
+                  variant="outline"
+                  onClick={() => redo()}
+                >
+                  <RedoIcon />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="whitespace-pre-line max-w-[300px]">
+                {"Redo last action"}
+              </TooltipContent>
+            </Tooltip>
             <FindReplace
               fields={rows?.rows[0] ? Object.keys(rows.rows[0]) : []}
               onFind={handleFind}

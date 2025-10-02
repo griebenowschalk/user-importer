@@ -20,9 +20,6 @@ export const useTableHistory = (
   const historyRef = useRef<HistoryEntry[]>([]);
   const historyIndexRef = useRef<number>(-1);
 
-  console.log(historyRef.current);
-  console.log(historyIndexRef.current);
-
   const getTableState = useCallback((): TableState | null => {
     if (!rows) return null;
 
@@ -87,7 +84,7 @@ export const useTableHistory = (
     pushHistory,
     undo,
     redo,
-    canUndo: historyIndexRef.current > 0,
+    canUndo: historyIndexRef.current >= 0,
     canRedo: historyIndexRef.current < historyRef.current.length - 1,
   };
 };
