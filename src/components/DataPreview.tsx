@@ -19,6 +19,7 @@ import {
   GroupedRowChange,
   DataPreviewProps,
   HighlightCell,
+  ValidationChunk,
 } from "@/types";
 import { Typography } from "./ui/typography";
 import { Button } from "./ui/button";
@@ -492,19 +493,21 @@ export default function DataPreview({
   const headerGroups = table.getHeaderGroups();
 
   // Find And Replace
-  const handleBulkFindReplace = (params: {
+  const handleBulkFindReplace = async (params: {
     find: string;
     field: string;
+    exactMatch?: boolean;
     replace: string;
   }) => {
-    const { find, field, replace } = params;
-    const base = toRegex(find);
+    const { find, field, exactMatch, replace } = params;
+    const base = toRegex(find, exactMatch);
     const regex = base.flags.includes("g")
       ? base
       : new RegExp(base, `${base.flags}g`);
 
+    // Map of rows that were mutated to their new values for each field
     const byRow = new Map<number, Record<string, unknown>>();
-    const affectedRows = new Set<number>();
+    const affectedRows = new Set<number>(); // Set of rows that were mutated
 
     for (let i = 0; i < data.length; i++) {
       const actualRowIndex = showErrors ? (groupedErrors?.[i]?.row ?? i) : i;
@@ -528,7 +531,7 @@ export default function DataPreview({
 
           if (next !== stringValue) {
             mutated = true;
-            (affectedRows as any)[key] = next;
+            (raw as any)[key] = next;
           }
         }
       }
@@ -540,23 +543,107 @@ export default function DataPreview({
     }
 
     if (byRow.size === 0) return;
+
+    const sortedIndices = [...byRow.keys()].sort(
+      (a, b) => Number(a) - Number(b)
+    );
+    const runs: Array<{ start: number; indices: number[] }> = [];
+    let run: number[] = [];
+
+    /**
+     * Turn this:
+     * [2, 3, 4, 7, 8, 10]
+     * Into this:
+      [
+        { start: 2, indices: [2, 3, 4] },
+        { start: 7, indices: [7, 8] },
+        { start: 10, indices: [10] }
+      ]
+     */
+    for (let i = 0; i < sortedIndices.length; i++) {
+      if (i === 0 || sortedIndices[i] === sortedIndices[i - 1] + 1) {
+        run.push(sortedIndices[i]);
+      } else {
+        runs.push({ start: run[0], indices: run });
+        run = [sortedIndices[i]];
+      }
+    }
+
+    if (run.length) {
+      runs.push({ start: run[0], indices: [...run] });
+    }
+
+    const chunks: { chunk: ValidationChunk; indices: number[] }[] = [];
+    for (const run of runs) {
+      const rawRows = run.indices.map(i => byRow.get(i)!);
+      const chunk = await validateChunkOptimized(rawRows, run.start, mappings);
+      chunks.push({ chunk, indices: run.indices });
+    }
+
+    setRows(old => {
+      if (!old) return old;
+
+      const prevState = getTableState()!;
+      const mergedRows = old.rows.slice();
+
+      for (const { indices, chunk } of chunks) {
+        for (let i = 0; i < indices.length; i++) {
+          const index = chunk.startRow + i;
+          mergedRows[index] = chunk.rows[i];
+        }
+      }
+
+      const otherErrors = (old.errors ?? []).filter(
+        e => !affectedRows.has(e.row)
+      );
+      const otherChanges = (old.changes ?? []).filter(
+        c => !affectedRows.has(c.row)
+      );
+      const newErrors = otherErrors.concat(...chunks.map(c => c.chunk.errors));
+      const newChanges = otherChanges.concat(
+        ...chunks.map(c => c.chunk.changes)
+      );
+
+      const nextGroupedErrors = groupErrorsByRow(newErrors);
+      const nextGroupedChanges = groupChangesByRow(newChanges);
+
+      const nextState = {
+        rows: mergedRows,
+        errors: newErrors,
+        changes: newChanges,
+        groupedErrors: nextGroupedErrors,
+        groupedChanges: nextGroupedChanges,
+      };
+
+      pushHistory(
+        `Replace (${byRow.size} row${byRow.size === 1 ? "" : "s"})`,
+        prevState,
+        nextState
+      );
+
+      setGroupedErrors(nextGroupedErrors);
+      setGroupedChanges(nextGroupedChanges);
+
+      return { rows: mergedRows, errors: newErrors, changes: newChanges };
+    });
   };
 
   const handleFind = async (params: {
     find: string;
     field: string;
+    exactMatch?: boolean;
     replace?: string;
   }) => {
-    const { find, field, replace } = params;
+    const { find, field, replace, exactMatch } = params;
     if (!find?.length || !field?.length) return;
 
     if (replace && replace.length > 0) {
-      await handleBulkFindReplace({ find, field, replace });
+      await handleBulkFindReplace({ find, field, exactMatch, replace });
       setFindMatches(new Set<string>());
       return;
     }
 
-    const regex = toRegex(find);
+    const regex = toRegex(find, exactMatch);
     const matches = new Set<string>();
 
     // Work on the same data as the table currently in view
@@ -678,6 +765,8 @@ export default function DataPreview({
             <FindReplace
               fields={rows?.rows[0] ? Object.keys(rows.rows[0]) : []}
               onFind={handleFind}
+              clear={() => setFindMatches(new Set())}
+              matches={findMatches.size > 0 ? findMatches.size : undefined}
             />
             <DownloadDialog
               onDownload={(fileName: string, format: string) => {
@@ -845,7 +934,7 @@ export default function DataPreview({
                               className={`px-3 py-2 border-b border-gray-300 text-left whitespace-nowrap overflow-hidden 
                               ${!isRowNumber && isChange && !isError ? "bg-blue-100" : ""} 
                               ${!isRowNumber && isError ? "bg-red-100" : ""} 
-                              ${!isRowNumber && !isError && !isChange && isFindMatch ? "bg-yellow-100" : ""} 
+                              ${!isRowNumber && isFindMatch ? "bg-yellow-100" : ""} 
                               ${index !== columns.length - 1 ? "border-r" : ""}
                               ${
                                 focusedCell &&

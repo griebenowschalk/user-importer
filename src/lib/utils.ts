@@ -338,7 +338,10 @@ export const escapeRegex = (input: string) => {
 };
 
 // convert a string to a regex
-export const toRegex = (input: string) => {
+export const toRegex = (input: string, exactMatch?: boolean) => {
+  if (exactMatch) {
+    return new RegExp(`^${escapeRegex(input)}$`, "i");
+  }
   const m = input.match(/^\/(.*)\/([gimsuy]*)$/);
   if (!m) return new RegExp(escapeRegex(input), "i");
   return new RegExp(m[1], m[2] || "g");

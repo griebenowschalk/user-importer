@@ -79,7 +79,7 @@ export function Typography({
     case "p":
       return <p className={cn("text-base", className)}>{children}</p>;
     case "span":
-      return <span className={cn("text-base", className)}>{children}</span>;
+      return <span className={cn("text-xs", className)}>{children}</span>;
     case "div":
       return <div className={cn("text-base", className)}>{children}</div>;
     default:

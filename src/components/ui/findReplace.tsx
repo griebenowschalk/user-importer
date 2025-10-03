@@ -4,7 +4,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { FileSearchIcon } from "lucide-react";
+import { FileSearchIcon, XIcon } from "lucide-react";
 import { useState } from "react";
 import { Typography } from "./typography";
 import { Input } from "./input";
@@ -19,17 +19,31 @@ import {
 } from "./select";
 import { useForm } from "react-hook-form";
 import * as yup from "yup";
+import { Checkbox } from "./checkbox";
 
 interface FindReplaceProps {
   fields: string[];
-  onFind: (data: { find: string; field: string; replace?: string }) => void;
+  onFind: (data: {
+    find: string;
+    field: string;
+    exactMatch?: boolean;
+    replace?: string;
+  }) => void;
+  clear: () => void;
+  matches?: number;
 }
 
-export function FindReplace({ fields, onFind }: FindReplaceProps) {
+export function FindReplace({
+  fields,
+  onFind,
+  clear,
+  matches,
+}: FindReplaceProps) {
   const [open, setOpen] = useState(false);
   const schema = yup.object({
     find: yup.string().required(),
     field: yup.string().required(),
+    exactMatch: yup.boolean().optional(),
     replace: yup.string().optional(),
   });
 
@@ -37,6 +51,7 @@ export function FindReplace({ fields, onFind }: FindReplaceProps) {
     find: string;
     field: string;
     replace?: string;
+    exactMatch?: boolean;
   }>({
     resolver: async data => {
       try {
@@ -57,15 +72,16 @@ export function FindReplace({ fields, onFind }: FindReplaceProps) {
       find: "",
       field: "all",
       replace: undefined,
+      exactMatch: undefined,
     },
   });
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open}>
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
-            <Button variant="outline">
+            <Button variant="outline" onClick={() => setOpen(true)}>
               <FileSearchIcon />
             </Button>
           </PopoverTrigger>
@@ -76,35 +92,50 @@ export function FindReplace({ fields, onFind }: FindReplaceProps) {
       </Tooltip>
       <PopoverContent side="top" align="end" className="w-80">
         <div className="flex flex-col gap-2">
-          <div className="space-y-2">
-            <Typography as="h4" className="leading-none font-medium">
+          <div className="flex flex-row items-start justify-between gap-2">
+            <Typography as="h6" className="leading-none font-medium">
               Find and Replace
             </Typography>
-            {/* <Typography as="p" className="text-muted-foreground text-sm">
-              Find and replace text in the table.
-            </Typography> */}
+            <Button
+              className="h-4 p-0 w-4"
+              variant="ghost"
+              onClick={() => {
+                setOpen(false);
+                form.reset();
+                clear();
+              }}
+            >
+              <XIcon />
+            </Button>
           </div>
           <form
             className="flex flex-col gap-2"
-            onSubmit={form.handleSubmit(onFind)}
+            onSubmit={form.handleSubmit(data => {
+              onFind(data);
+            })}
           >
-            <div className="flex flex-col gap-1">
-              <div className="flex flex-col gap-1">
-                <Typography as="h6">Find</Typography>
-                <Input
-                  id="find"
-                  defaultValue=""
-                  className="h-8"
-                  {...form.register("find")}
-                />
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2">
+                <Typography as="span">Find</Typography>
+                <div className="flex flex-row gap-2">
+                  <Input
+                    id="find"
+                    defaultValue=""
+                    className="h-8"
+                    {...form.register("find")}
+                  />
+                  <Button className="h-8" type="submit">
+                    Find
+                  </Button>
+                </div>
               </div>
-              <div className="flex flex-col gap-1">
-                <Typography as="h6">Field</Typography>
+              <div className="flex flex-col gap-2">
+                <Typography as="span">Field</Typography>
                 <Select
                   onValueChange={value => form.setValue("field", value)}
                   value={form.watch("field")}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger className="w-full h-8">
                     <SelectValue placeholder="Select a field" />
                   </SelectTrigger>
                   <SelectContent>
@@ -118,9 +149,21 @@ export function FindReplace({ fields, onFind }: FindReplaceProps) {
                     </SelectGroup>
                   </SelectContent>
                 </Select>
+                <div className="flex flex-row items-center gap-2">
+                  <Checkbox
+                    checked={form.watch("exactMatch") || false}
+                    onCheckedChange={() => {
+                      form.setValue("exactMatch", !form.watch("exactMatch"));
+                    }}
+                  />
+                  <Typography as="span">Exact Match</Typography>
+                </div>
               </div>
-              <div className="flex flex-col gap-1">
-                <Typography as="h6">Replace</Typography>
+              <div className="flex flex-col gap-2">
+                {matches && (
+                  <Typography as="span">Matches: {matches}</Typography>
+                )}
+                <Typography as="span">Replace</Typography>
                 <Input
                   id="replace"
                   defaultValue=""
@@ -130,10 +173,12 @@ export function FindReplace({ fields, onFind }: FindReplaceProps) {
               </div>
             </div>
             <div className="flex justify-end gap-1">
-              <Button variant="outline" onClick={() => setOpen(false)}>
-                Cancel
+              <Button disabled={!matches} variant="outline" type="submit">
+                Replace
               </Button>
-              <Button type="submit">Find</Button>
+              <Button disabled={!matches} type="submit">
+                Replace All
+              </Button>
             </div>
           </form>
         </div>
