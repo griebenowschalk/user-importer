@@ -20,6 +20,7 @@ import {
 import { useForm } from "react-hook-form";
 import * as yup from "yup";
 import { Checkbox } from "./checkbox";
+import { ActionType } from "@/types";
 
 interface FindReplaceProps {
   fields: string[];
@@ -28,6 +29,7 @@ interface FindReplaceProps {
     field: string;
     exactMatch?: boolean;
     replace?: string;
+    actionType: ActionType;
   }) => void;
   clear: () => void;
   matches?: number;
@@ -46,6 +48,8 @@ export function FindReplace({
     exactMatch: yup.boolean().optional(),
     replace: yup.string().optional(),
   });
+
+  const [actionType, setActionType] = useState<ActionType>(ActionType.find);
 
   const form = useForm<{
     find: string;
@@ -111,7 +115,10 @@ export function FindReplace({
           <form
             className="flex flex-col gap-2"
             onSubmit={form.handleSubmit(data => {
-              onFind(data);
+              onFind({
+                ...data,
+                actionType,
+              });
             })}
           >
             <div className="flex flex-col gap-2">
@@ -124,7 +131,11 @@ export function FindReplace({
                     className="h-8"
                     {...form.register("find")}
                   />
-                  <Button className="h-8" type="submit">
+                  <Button
+                    className="h-8"
+                    type="submit"
+                    onClick={() => setActionType(ActionType.find)}
+                  >
                     Find
                   </Button>
                 </div>
@@ -173,10 +184,12 @@ export function FindReplace({
               </div>
             </div>
             <div className="flex justify-end gap-1">
-              <Button disabled={!matches} variant="outline" type="submit">
-                Replace
-              </Button>
-              <Button disabled={!matches} type="submit">
+              <Button
+                className="h-8"
+                disabled={!matches}
+                type="submit"
+                onClick={() => setActionType(ActionType.replaceAll)}
+              >
                 Replace All
               </Button>
             </div>

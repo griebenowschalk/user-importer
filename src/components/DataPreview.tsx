@@ -20,6 +20,7 @@ import {
   DataPreviewProps,
   HighlightCell,
   ValidationChunk,
+  ActionType,
 } from "@/types";
 import { Typography } from "./ui/typography";
 import { Button } from "./ui/button";
@@ -633,11 +634,12 @@ export default function DataPreview({
     field: string;
     exactMatch?: boolean;
     replace?: string;
+    actionType: ActionType;
   }) => {
-    const { find, field, replace, exactMatch } = params;
+    const { find, field, replace, exactMatch, actionType } = params;
     if (!find?.length || !field?.length) return;
 
-    if (replace && replace.length > 0) {
+    if (replace && replace.length > 0 && actionType === ActionType.replaceAll) {
       await handleBulkFindReplace({ find, field, exactMatch, replace });
       setFindMatches(new Set<string>());
       return;

@@ -83,6 +83,10 @@ export type ColumnType =
   | "phone"
   | "category"
   | "country";
+export enum ActionType {
+  find = "find",
+  replaceAll = "replaceAll",
+}
 
 export type RowData = Record<string, unknown>;
 

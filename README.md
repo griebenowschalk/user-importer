@@ -2,6 +2,8 @@
 
 A lightweight, modular importer for Users that supports CSV/XLS/XLSX/JSON, header-to-schema mapping, data cleaning & validation, preview in a virtualized table, and scalable handling of large files (25k+ rows).
 
+[Live Demo – Click to open](https://user-importer.netlify.app/)
+
 ## Tech Stack
 
 - **React 19** - Modern React with concurrent features
@@ -45,7 +47,7 @@ npm install
 npm run dev
 ```
 
-The app will open at `http://localhost:3000`
+The app will open at `http://localhost:4000`
 
 ### Available Scripts
 

@@ -67,14 +67,6 @@ function App() {
           <Suspense fallback={<div>Loading...</div>}>
             <DataPreview
               fileData={(() => {
-                console.log(
-                  "🔍 App - passing fileData to DataPreview rows sample:",
-                  fileData.rows[0]
-                );
-                console.log(
-                  "🔍 App - passing headerMappings to DataPreview:",
-                  headerMappings
-                );
                 return fileData;
               })()}
               mappings={headerMappings}
