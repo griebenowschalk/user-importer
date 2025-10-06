@@ -120,7 +120,7 @@ export default function DataPreview({
       id: "_row",
       enableSorting: false,
       header: ({ table }) => (
-        <div className="flex items-center gap-2 justify-center">
+        <div className="flex w-fit items-center gap-2 justify-center pl-1">
           <Typography as="span">#</Typography>
           <Checkbox
             checked={table.getIsAllRowsSelected()}
