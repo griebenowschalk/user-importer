@@ -45,7 +45,7 @@ class UserColumnMatcher {
       "employment date",
       "employmentdate",
     ],
-    department: ["department", "dept", "division", "div", "unit", "section"],
+    department: ["department", "dept", "team", "div", "unit", "section"],
     division: [
       "division",
       "div",
@@ -53,6 +53,7 @@ class UserColumnMatcher {
       "section",
       "business unit",
       "businessunit",
+      "area",
     ],
     position: [
       "position",
@@ -79,6 +80,7 @@ class UserColumnMatcher {
       "workphonenumber",
       "work phone number",
       "work phone",
+      "work cell",
       "workphone",
       "office phone",
       "officephone",
@@ -119,11 +121,10 @@ class UserColumnMatcher {
   private static get index() {
     if (!this._index) {
       const map = new Map<string, keyof User>();
-      for (const [field, vars] of Object.entries(
+      for (const field of Object.keys(
         UserColumnMatcher.FIELD_VARIATIONS
-      ) as [keyof User, string[]][]) {
-        vars.forEach(v => map.set(UserColumnMatcher.norm(v), field));
-        // also index the canonical field name
+      ) as (keyof User)[]) {
+        // Only index the canonical field name for exact matches; variations are fuzzy via Fuse
         map.set(UserColumnMatcher.norm(field), field);
       }
       this._index = map;
@@ -259,12 +260,17 @@ class UserColumnMatcher {
    * @returns The mapped User object.
    */
   static mapRowToUser(
-    row: Record<string, any>,
+    row: Record<string, unknown>,
     mapping: UserFieldMapping
   ): Partial<User> {
     const out: Partial<User> = {};
     for (const [src, field] of Object.entries(mapping)) {
-      if (row[src] !== undefined) out[field] = row[src];
+      if (Object.prototype.hasOwnProperty.call(row, src)) {
+        const value = row[src as keyof typeof row];
+        if (value !== undefined) {
+          out[field] = value as never;
+        }
+      }
     }
     return out;
   }

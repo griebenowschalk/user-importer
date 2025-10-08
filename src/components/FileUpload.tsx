@@ -8,6 +8,7 @@ import { checkIfExcel } from "../lib/utils";
 import { Typography } from "./ui/typography";
 import { Download } from "lucide-react";
 import { downloadExcelTemplate, downloadCSVTemplate } from "@/lib/templates";
+import ErrorDialog from "./ui/errorDialog";
 
 interface FileUploadProps {
   onFileUploaded: (data: FileParseResult) => void;
@@ -101,7 +102,7 @@ export default function FileUpload({
           </Button>
         </div>
       </div>
-      {error && <p className="text-red-500">{error}</p>}
+      {error && <ErrorDialog error={error} onClose={() => setError(null)} />}
       {isLoading && <p>Loading...</p>}
     </Container>
   );

@@ -1,4 +1,4 @@
-import { FileParseResult } from "@/types";
+import { FileParseResult, USER_KEYS } from "@/types";
 import { read, write, utils, WorkBook, ParsingOptions } from "xlsx";
 import Papa from "papaparse";
 import { expose } from "comlink";
@@ -68,6 +68,19 @@ function parseExcelSheet(workBook: WorkBook, sheetNames: string[]) {
       if (jsonData.length === 0) return null;
 
       const potentialHeaders = jsonData[0] as any[];
+      console.log("potentialHeaders", potentialHeaders);
+
+      if (potentialHeaders.length < USER_KEYS.length) {
+        throw new Error(
+          "Sheet has less headers than required by user schema. The schema requires " +
+            USER_KEYS.length +
+            " fields, but the sheet only has " +
+            potentialHeaders.length +
+            " fields. The required fields are " +
+            USER_KEYS.filter(key => !potentialHeaders.includes(key)).join(", ")
+        );
+      }
+
       const headerQuality =
         UserColumnMatcher.analyzeHeaderQuality(potentialHeaders);
 
@@ -319,6 +332,19 @@ async function parseCSV(file: File): Promise<FileParseResult> {
         const rows = results.data as Record<string, any>[];
         const headers = results.meta.fields || [];
 
+        if (headers.length < USER_KEYS.length) {
+          reject(
+            new Error(
+              "CSV file has less headers than required by user schema. The schema requires " +
+                USER_KEYS.length +
+                " fields, but the file only has " +
+                headers.length +
+                " fields. The required fields are " +
+                USER_KEYS.filter(key => !headers.includes(key)).join(", ")
+            )
+          );
+        }
+
         const mapping = UserColumnMatcher.createUserFieldMapping(headers);
 
         resolve({
@@ -364,6 +390,20 @@ async function parseJSON(file: File): Promise<FileParseResult> {
         }
 
         const headers = Object.keys(data[0]);
+
+        if (headers.length < USER_KEYS.length) {
+          reject(
+            new Error(
+              "JSON file has less headers than required by user schema. The schema requires " +
+                USER_KEYS.length +
+                " fields, but the file only has " +
+                headers.length +
+                " fields. The required fields are " +
+                USER_KEYS.filter(key => !headers.includes(key)).join(", ")
+            )
+          );
+        }
+
         const rows = data as Record<string, any>[];
 
         const mapping = UserColumnMatcher.createUserFieldMapping(headers);

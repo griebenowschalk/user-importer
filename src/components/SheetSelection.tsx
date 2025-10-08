@@ -5,6 +5,7 @@ import { Button } from "./ui/button";
 import { Typography } from "./ui/typography";
 import { Container } from "./ui/container";
 import { Checkbox } from "./ui/checkbox";
+import ErrorDialog from "./ui/errorDialog";
 
 interface SheetSelectionProps {
   onFileUploaded: (data: FileParseResult) => void;
@@ -20,11 +21,17 @@ export default function SheetSelection({
   file,
 }: SheetSelectionProps) {
   const [selectedSheet, setSelectedSheet] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSheetSelected = async () => {
     if (!file) return;
-    const result = await parseFileOptimized(file, selectedSheet);
-    onFileUploaded(result);
+    setError(null);
+    try {
+      const result = await parseFileOptimized(file, selectedSheet);
+      onFileUploaded(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to parse file");
+    }
   };
 
   return (
@@ -55,6 +62,7 @@ export default function SheetSelection({
           Next
         </Button>
       </div>
+      {error && <ErrorDialog onClose={() => setError(null)} error={error} />}
     </Container>
   );
 }
