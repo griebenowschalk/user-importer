@@ -315,9 +315,14 @@ export default function DataPreview({
           ? (groupedErrors?.[rowIndex]?.row ?? rowIndex)
           : rowIndex;
 
+        const baseRow =
+          rows?.rows?.[actualRowIndex] ?? fileData.rows[actualRowIndex];
+        // Ensure we always update by target field id (post-mapping)
+        const targetField =
+          (mappings as Record<string, string>)?.[columnId] ?? columnId;
         const updatedRawRow = {
-          ...fileData.rows[actualRowIndex],
-          [columnId]: value,
+          ...baseRow,
+          [targetField]: value,
         };
 
         validateAndUpdateRow(
@@ -517,7 +522,7 @@ export default function DataPreview({
 
       let mutated = false;
       const raw = byRow.get(actualRowIndex) ?? {
-        ...fileData.rows[actualRowIndex],
+        ...(rows?.rows?.[actualRowIndex] ?? fileData.rows[actualRowIndex]),
       };
 
       // Loop through all keys in the row and check if they match the regex

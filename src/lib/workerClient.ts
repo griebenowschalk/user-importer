@@ -11,7 +11,7 @@ type Api = {
   ): Promise<FileParseResult>;
   getFileSheetNames(file: File): Promise<string[]>;
   downloadFile(
-    rows: Record<string, any>[],
+    rows: Record<string, unknown>[],
     fileName: string,
     format: string
   ): Promise<{ buffer: ArrayBuffer; type: string; filename: string }>;
@@ -78,7 +78,7 @@ export async function getFileSheetNames(file: File) {
 }
 
 export async function downloadFile(
-  rows: Record<string, any>[],
+  rows: Record<string, unknown>[],
   fileName: string,
   format: string
 ) {

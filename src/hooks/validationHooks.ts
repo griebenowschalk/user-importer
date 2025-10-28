@@ -1,4 +1,4 @@
-import { checkValidNumber, numberUpdate } from "../lib/utils";
+import { checkValidNumberCore, numberUpdate } from "../lib/utils";
 import type { ColumnHook, RowData, RowHook } from "../types";
 import { allowedTLDs } from "../validation/schema";
 
@@ -27,9 +27,9 @@ const copyEmptyNumber = (row: RowData) => {
   const updatedMobileNumber = rowUpdate?.mobileNumber;
   if (
     !row.workPhoneNumber &&
-    checkValidNumber(
-      row.country as string,
-      (updatedMobileNumber as string) || (row.mobileNumber as string)
+    checkValidNumberCore(
+      (row.country as string) || "",
+      (updatedMobileNumber as string) || (row.mobileNumber as string) || ""
     ).valid
   ) {
     rowUpdate = {
@@ -41,60 +41,80 @@ const copyEmptyNumber = (row: RowData) => {
   return { row: rowUpdate };
 };
 
+const validateAndUpdatePhoneNumber = (
+  field: "workPhoneNumber" | "mobileNumber",
+  row: RowData,
+  rowUpdate: RowData,
+  country: string,
+  baseline: ReturnType<typeof checkValidNumberCore>,
+  cleanUp?: boolean
+) => {
+  const phoneValue = row[field];
+  if (!phoneValue) return { rowUpdate, error: null };
+
+  const phoneCheck = checkValidNumberCore(country, phoneValue as string);
+  const ccMismatch =
+    (phoneValue as string).startsWith("+") &&
+    !!phoneCheck.numberCallingCode &&
+    !!baseline.callingCode &&
+    phoneCheck.numberCallingCode !== baseline.callingCode;
+  if (!phoneCheck.valid || ccMismatch) {
+    const { newNumber, error } = numberUpdate(
+      field,
+      phoneValue as string,
+      country,
+      baseline.callingCode,
+      true
+    );
+
+    let updatedRow = rowUpdate;
+    if (cleanUp) {
+      updatedRow = {
+        ...updatedRow,
+        [field]: newNumber,
+      };
+    }
+    return { rowUpdate: updatedRow, error };
+  }
+  return { rowUpdate, error: null };
+};
+
 const validatePhoneNumber = (
   row: RowData,
   cleanUp?: boolean
 ): { row: RowData; errors?: { field: string; message: string }[] } => {
   let rowUpdate = row;
-  let errors = [];
-  const { valid, callingCode } = checkValidNumber(
-    row.country as string,
-    row.workPhoneNumber as string
+  const errors: { field: string; message: string }[] = [];
+  const country = (row.country as string) || "";
+  const baseline = checkValidNumberCore(
+    country,
+    (row.mobileNumber as string) || (row.workPhoneNumber as string) || ""
   );
 
-  if (row.workPhoneNumber && !valid) {
-    const { newNumber, error } = numberUpdate(
-      "workPhoneNumber",
-      row.workPhoneNumber as string,
-      row.country as string,
-      callingCode,
-      true
-    );
-
-    if (cleanUp) {
-      rowUpdate = {
-        ...rowUpdate,
-        workPhoneNumber: newNumber,
-      };
-    }
-
-    if (error) {
-      errors.push(error);
-    }
+  const resultWork = validateAndUpdatePhoneNumber(
+    "workPhoneNumber",
+    row,
+    rowUpdate,
+    country,
+    baseline,
+    cleanUp
+  );
+  rowUpdate = resultWork.rowUpdate;
+  if (resultWork.error) {
+    errors.push(resultWork.error);
   }
 
-  if (
-    row.mobileNumber &&
-    !checkValidNumber(row.country as string, row.mobileNumber as string).valid
-  ) {
-    const { newNumber, error } = numberUpdate(
-      "mobileNumber",
-      row.mobileNumber as string,
-      row.country as string,
-      callingCode,
-      true
-    );
-
-    if (cleanUp) {
-      rowUpdate = {
-        ...rowUpdate,
-        mobileNumber: newNumber,
-      };
-    }
-
-    if (error) {
-      errors.push(error);
-    }
+  const resultMobile = validateAndUpdatePhoneNumber(
+    "mobileNumber",
+    row,
+    rowUpdate,
+    country,
+    baseline,
+    cleanUp
+  );
+  rowUpdate = resultMobile.rowUpdate;
+  if (resultMobile.error) {
+    errors.push(resultMobile.error);
   }
 
   return { row: rowUpdate, errors };

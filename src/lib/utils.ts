@@ -17,7 +17,11 @@ import {
   isValid,
 } from "date-fns";
 import { CountryProperty, customList } from "country-codes-list";
-import { CountryCode, isValidPhoneNumber } from "libphonenumber-js";
+import {
+  CountryCode,
+  isValidPhoneNumber,
+  parsePhoneNumberFromString,
+} from "libphonenumber-js";
 import { toAlpha2 } from "i18n-iso-countries";
 
 export function cn(...inputs: ClassValue[]) {
@@ -279,6 +283,34 @@ export const checkValidNumber = (country: string, number: string) => {
     };
   } catch {
     return { valid: false, callingCode };
+  }
+};
+
+export const checkValidNumberCore = (country: string, number: string) => {
+  const countryCodesList = customList(
+    "countryCode" as CountryProperty,
+    "{countryCallingCode}"
+  );
+  const alpha2Code = toAlpha2(country);
+  const callingCode = alpha2Code
+    ? (countryCodesList[alpha2Code as keyof typeof countryCodesList] as string)
+    : "";
+
+  try {
+    const phoneNumber = isValidPhoneNumber(number, {
+      defaultCountry: alpha2Code as CountryCode,
+    });
+
+    const parsed = parsePhoneNumberFromString(number);
+    const numberCallingCode = parsed?.countryCallingCode ?? "";
+
+    return {
+      valid: phoneNumber,
+      callingCode,
+      numberCallingCode,
+    };
+  } catch {
+    return { valid: false, callingCode, numberCallingCode: "" };
   }
 };
 
