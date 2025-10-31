@@ -1,5 +1,5 @@
 codecov:
-  token: # Optional, set via CODECOV_TOKEN env var
+  token: ${{ secrets.CODECOV_TOKEN }}
   notify:
     require_ci_to_pass: false
 
@@ -22,4 +22,3 @@ ignore:
   - "**/*.test.tsx"
   - "**/__tests__/**"
   - "**/__test__/**"
-
