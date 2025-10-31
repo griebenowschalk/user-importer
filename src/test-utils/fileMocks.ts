@@ -1,4 +1,3 @@
-// fileMocks.ts
 import { vi } from "vitest";
 
 const OriginalCreateObjectURL = URL.createObjectURL;

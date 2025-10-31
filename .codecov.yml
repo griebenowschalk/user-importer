@@ -1,0 +1,25 @@
+codecov:
+  token: # Optional, set via CODECOV_TOKEN env var
+  notify:
+    require_ci_to_pass: false
+
+coverage:
+  status:
+    project:
+      default:
+        target: 80%
+        threshold: 1%
+    patch:
+      default:
+        target: 70%
+        threshold: 1%
+
+ignore:
+  - "src/types/*"
+  - "src/main.tsx"
+  - "src/test-utils/*"
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/__tests__/**"
+  - "**/__test__/**"
+
