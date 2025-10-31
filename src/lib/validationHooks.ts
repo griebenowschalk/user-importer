@@ -1,4 +1,4 @@
-import { checkValidNumberCore, numberUpdate } from "../lib/utils";
+import { checkValidNumberCore, numberUpdate } from "./utils";
 import type { ColumnHook, RowData, RowHook } from "../types";
 import { allowedTLDs } from "../validation/schema";
 

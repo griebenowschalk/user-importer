@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
   flexRender,
   RowData,
   ColumnDef,
-  type CellContext,
   RowSelectionState,
   getSortedRowModel,
   SortingState,
@@ -13,22 +12,18 @@ import {
 import { extractCleaningRules, userSchema } from "../validation/schema";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
-  ValidationProgress,
   CleaningResult,
   GroupedRowError,
   GroupedRowChange,
   DataPreviewProps,
   HighlightCell,
-  ValidationChunk,
   ActionType,
+  User,
+  CleaningRule,
 } from "@/types";
 import { Typography } from "./ui/typography";
 import { Button } from "./ui/button";
 import { Container } from "./ui/container";
-import {
-  validateRowsOptimized,
-  validateChunkOptimized,
-} from "../lib/validationClient";
 import { Progress } from "./ui/progress";
 import {
   Tooltip,
@@ -40,8 +35,6 @@ import {
   getGroupedFieldChange,
   getGroupedFieldError,
   getGroupedFieldMessages,
-  groupErrorsByRow,
-  groupChangesByRow,
   getColumnWidth,
   toRegex,
 } from "../lib/utils";
@@ -56,8 +49,6 @@ import {
   RedoIcon,
 } from "lucide-react";
 import { fields } from "../localisation/fields";
-import EditableSelect from "./ui/editableSelect";
-import EditableCell from "./ui/editableCell";
 import useSkipper from "../hooks/useSkipper";
 import useFindError from "../hooks/useFindError";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
@@ -66,13 +57,16 @@ import DownloadDialog from "./ui/downloadDialog";
 import { downloadFile } from "../lib/workerClient";
 import { FindReplace } from "./ui/findReplace";
 import { useTableHistory } from "../hooks/useTableHistory";
+import { useValidation } from "@/hooks/useValidation";
+import { usePreviewColumns } from "@/hooks/usePreviewColumns";
+import { createPreviewController } from "@/lib/previewController";
+import { bulkFindReplace, computeMatches } from "@/lib/findReplace";
 
 declare module "@tanstack/react-table" {
   interface TableMeta<TData extends RowData> {
     updateData: (rowIndex: number, columnId: string, value: unknown) => void;
     deleteRows: (rowIndices: number[]) => void;
     duplicateRow: (rowIndex: number) => void;
-    // Reference generic to satisfy no-unused-vars
     __rowType__?: TData;
     setFocusedCell?: (rowIndex: number, columnId: string | null) => void;
   }
@@ -85,37 +79,35 @@ export default function DataPreview({
   onBack,
 }: DataPreviewProps) {
   const [showErrors, setShowErrors] = useState(false);
-  const [groupedErrors, setGroupedErrors] = useState<GroupedRowError[] | null>(
-    null
-  );
   const [selectedRows, setSelectedRows] = useState<RowSelectionState>({});
   const [autoResetPageIndex, skipAutoResetPageIndex] = useSkipper();
-  const [groupedChanges, setGroupedChanges] = useState<
-    GroupedRowChange[] | null
-  >(null);
-  const [rows, setRows] = useState<CleaningResult | null>(null);
-  const [validationProgress, setValidationProgress] =
-    useState<ValidationProgress | null>(null);
-  // Error navigation state/refs
-  const cellRefs = useRef<Map<string, HTMLTableCellElement>>(new Map());
   const [focusedCell, setFocusedCell] = useState<HighlightCell | null>(null);
   const [findMatches, setFindMatches] = useState<Set<string>>(new Set());
   const [sorting, setSorting] = useState<SortingState>([]);
+  const cellRefs = useRef<Map<string, HTMLTableCellElement>>(new Map());
 
-  const { undo, redo, canUndo, canRedo, getTableState, pushHistory } =
-    useTableHistory(
-      rows,
-      groupedErrors,
-      groupedChanges,
-      setRows,
-      setGroupedErrors,
-      setGroupedChanges
-    );
+  const {
+    validationProgress,
+    rows,
+    setRows,
+    groupedErrors,
+    setGroupedErrors,
+    groupedChanges,
+    setGroupedChanges,
+  } = useValidation(fileData, mappings);
+
+  const rules = useMemo(() => extractCleaningRules(userSchema as any), []);
+
+  const dataCols = usePreviewColumns({
+    headers: fileData?.headers ?? [],
+    mappings,
+    showErrors,
+    groupedErrors,
+    rules: rules as Record<keyof User, CleaningRule>,
+    getColumnWidth,
+  });
 
   const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(() => {
-    const headers = fileData?.headers ?? [];
-    const rules = extractCleaningRules(userSchema as any);
-
     const numberCol: ColumnDef<Record<string, unknown>> = {
       id: "_row",
       enableSorting: false,
@@ -159,316 +151,68 @@ export default function DataPreview({
       },
     };
 
-    const dataCols = headers.map(sourceHeader => {
-      const mapped = mappings?.[sourceHeader];
-      const rule = mapped ? (rules as any)[mapped] : undefined;
-      const hasOptions = !!rule?.options;
-      const options: string[] = hasOptions
-        ? Object.values(rule.options ?? {}).map(o => String(o))
-        : [];
-      return {
-        id: sourceHeader,
-        header: mapped ? mapped : sourceHeader,
-        enableSorting: true,
-        accessorKey: mapped ? mapped : sourceHeader, // Use target field for data access
-        cell: hasOptions
-          ? (ctx: CellContext<Record<string, unknown>, unknown>) => (
-              <EditableSelect ctx={ctx} options={options} />
-            )
-          : EditableCell,
-      } as ColumnDef<Record<string, unknown>>;
-    });
-
     return [numberCol, ...dataCols];
-  }, [fileData?.headers, mappings, showErrors, groupedErrors]);
+  }, [dataCols, showErrors, groupedErrors]);
 
-  // keep local rows in sync when file changes
-  useEffect(() => {
-    if (!fileData || !mappings || Object.keys(mappings).length === 0) return;
-    let cancelled = false;
+  const { undo, redo, canUndo, canRedo, getTableState, pushHistory } =
+    useTableHistory(
+      rows,
+      groupedErrors,
+      groupedChanges,
+      (next: CleaningResult) => setRows(next),
+      (ge: GroupedRowError[] | null) => setGroupedErrors(ge),
+      (gc: GroupedRowChange[] | null) => setGroupedChanges(gc)
+    );
 
-    (async () => {
-      const result = await validateRowsOptimized(
-        fileData.rows, // Now contains raw data
-        mappings,
-        progress => {
-          if (!cancelled) {
-            setValidationProgress(progress);
-          }
-        }
-      );
-      if (!cancelled) {
-        setRows({
-          rows: result.chunks.flatMap(c => c.rows),
-          errors: result.chunks.flatMap(c => c.errors),
-          changes: result.chunks.flatMap(c => c.changes),
-        });
-        setGroupedErrors(result.groupedErrors ?? null);
-        setGroupedChanges(result.groupedChanges ?? null);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [fileData, mappings]);
+  const controller = useMemo(
+    () =>
+      createPreviewController({
+        mappings: (mappings as Record<string, keyof User>) ?? {},
+        getTableState: () => ({
+          rows: rows?.rows ?? [],
+          errors: rows?.errors ?? [],
+          changes: rows?.changes ?? [],
+          groupedErrors: groupedErrors ?? [],
+          groupedChanges: groupedChanges ?? [],
+        }),
+        setRows: (state: any) =>
+          setRows({
+            rows: state.rows,
+            errors: state.errors,
+            changes: state.changes,
+          }),
+        setGroupedErrors,
+        setGroupedChanges,
+        pushHistory,
+        fileRows: fileData?.rows ?? [],
+      }),
+    [
+      mappings,
+      rows,
+      groupedErrors,
+      groupedChanges,
+      setRows,
+      setGroupedErrors,
+      setGroupedChanges,
+      pushHistory,
+      fileData?.rows,
+    ]
+  );
 
   const data = useMemo(
     () =>
       showErrors
-        ? (groupedErrors ?? []).map(g => ({
-            ...rows?.rows[g.row],
-          }))
+        ? (groupedErrors ?? []).map(g => ({ ...rows?.rows[g.row] }))
         : (rows?.rows ?? []),
     [rows, showErrors, groupedErrors]
   );
 
-  // Shared validation function for both updateData and duplicateRow
-  const validateAndUpdateRow = async (
-    rowData: Record<string, unknown>,
-    targetRowIndex: number,
-    mode: "replace" | "add",
-    label?: string,
-    options?: { pushHistory?: boolean }
-  ) => {
-    try {
-      const chunk = await validateChunkOptimized(
-        [rowData],
-        targetRowIndex,
-        mappings
-      );
-
-      const prevState = getTableState()!;
-
-      setRows(current => {
-        if (!current) return current;
-
-        const mergedRows = current.rows.slice();
-        if (chunk.rows[0]) {
-          mergedRows[targetRowIndex] = chunk.rows[0];
-        }
-
-        let newErrors: typeof current.errors;
-        let newChanges: typeof current.changes;
-
-        if (mode === "replace") {
-          // Replace errors and changes for this row index only
-          const otherErrors = (current.errors ?? []).filter(
-            e => e.row !== targetRowIndex
-          );
-          const otherChanges = (current.changes ?? []).filter(
-            c => c.row !== targetRowIndex
-          );
-          newErrors = otherErrors.concat(chunk.errors);
-          newChanges = otherChanges.concat(chunk.changes);
-        } else {
-          // Add new errors and changes for duplicated row
-          newErrors = current.errors.concat(chunk.errors);
-          newChanges = current.changes.concat(chunk.changes);
-        }
-
-        const nextGroupedErrors = groupErrorsByRow(newErrors);
-        const nextGroupedChanges = groupChangesByRow(newChanges);
-
-        // Update grouped state
-        setGroupedErrors(nextGroupedErrors);
-        setGroupedChanges(nextGroupedChanges);
-
-        return {
-          rows: mergedRows,
-          errors: newErrors,
-          changes: newChanges,
-        };
-      });
-
-      const nextState = getTableState()!;
-      if (options?.pushHistory !== false) {
-        pushHistory(
-          label ?? `Edit row ${targetRowIndex + 1}`,
-          prevState,
-          nextState
-        );
-      }
-    } catch (err) {
-      console.error(`Row validation failed (${mode}):`, err);
-    }
-  };
-
-  const table = useReactTable({
-    data,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    autoResetPageIndex,
-    getSortedRowModel: getSortedRowModel(),
-    onSortingChange: setSorting,
-    enableMultiRowSelection: true,
-    onRowSelectionChange: setSelectedRows,
-    state: {
-      rowSelection: selectedRows,
-      sorting,
-    },
-    meta: {
-      updateData: (rowIndex, columnId, value) => {
-        // Skip page index reset until after next rerender
-        skipAutoResetPageIndex();
-        const actualRowIndex = showErrors
-          ? (groupedErrors?.[rowIndex]?.row ?? rowIndex)
-          : rowIndex;
-
-        const baseRow =
-          rows?.rows?.[actualRowIndex] ?? fileData.rows[actualRowIndex];
-        // Ensure we always update by target field id (post-mapping)
-        const targetField =
-          (mappings as Record<string, string>)?.[columnId] ?? columnId;
-        const updatedRawRow = {
-          ...baseRow,
-          [targetField]: value,
-        };
-
-        validateAndUpdateRow(
-          updatedRawRow,
-          actualRowIndex,
-          "replace",
-          `Edit row ${actualRowIndex + 1} in column ${columnId}`
-        );
-      },
-      deleteRows: rowIndices => {
-        skipAutoResetPageIndex();
-        // Take a stable snapshot BEFORE computing next
-        const prevState = getTableState()!;
-
-        if (!rows || !rows.rows) return;
-
-        // Map visible indices to actual global indices when filtering errors
-        const actualIndices = rowIndices
-          .map(idx => (showErrors ? (groupedErrors?.[idx]?.row ?? idx) : idx))
-          .sort((a, b) => a - b);
-
-        // Filter out deleted rows and adjust indices in errors/changes
-        const newRows = rows.rows.filter(
-          (_, idx) => !actualIndices.includes(idx)
-        );
-
-        // Create index mapping for remaining rows
-        const indexMap = new Map<number, number>();
-        let newIndex = 0;
-        for (let i = 0; i < rows.rows.length; i++) {
-          if (!actualIndices.includes(i)) {
-            indexMap.set(i, newIndex++);
-          }
-        }
-
-        // Update errors with new indices, filter out deleted rows
-        const newErrors = (rows.errors ?? [])
-          .filter(e => !actualIndices.includes(e.row))
-          .map(e => ({ ...e, row: indexMap.get(e.row) ?? e.row }));
-
-        // Update changes with new indices, filter out deleted rows
-        const newChanges = (rows.changes ?? [])
-          .filter(c => !actualIndices.includes(c.row))
-          .map(c => ({ ...c, row: indexMap.get(c.row) ?? c.row }));
-
-        const nextGroupedErrors = groupErrorsByRow(newErrors);
-        const nextGroupedChanges = groupChangesByRow(newChanges);
-
-        // Apply state changes without using a functional updater (avoids StrictMode double-invoke side effects)
-        setRows({ rows: newRows, errors: newErrors, changes: newChanges });
-        setGroupedErrors(nextGroupedErrors);
-        setGroupedChanges(nextGroupedChanges);
-        setSelectedRows({});
-
-        // Push a single history entry after state updates are scheduled
-        pushHistory(`Delete rows ${actualIndices.join(", ")}`, prevState, {
-          rows: newRows,
-          errors: newErrors,
-          changes: newChanges,
-          groupedErrors: nextGroupedErrors,
-          groupedChanges: nextGroupedChanges,
-        });
-      },
-      duplicateRow: rowIndex => {
-        skipAutoResetPageIndex();
-        (async () => {
-          const prevState = getTableState()!;
-          if (!rows || !rows.rows) return;
-
-          const actualRowIndex = showErrors
-            ? (groupedErrors?.[rowIndex]?.row ?? rowIndex)
-            : rowIndex;
-
-          const rowToDuplicate = rows.rows[actualRowIndex];
-          if (!rowToDuplicate) return;
-
-          const duplicatedRowIndex = actualRowIndex + 1;
-
-          try {
-            // Validate the duplicated row first
-            const chunk = await validateChunkOptimized(
-              [rowToDuplicate],
-              duplicatedRowIndex,
-              mappings
-            );
-
-            const validatedRow = chunk.rows[0] ?? rowToDuplicate;
-
-            // Shift existing indices and append validation results
-            const shiftedErrors = (rows.errors ?? []).map(e => ({
-              ...e,
-              row: e.row >= duplicatedRowIndex ? e.row + 1 : e.row,
-            }));
-            const shiftedChanges = (rows.changes ?? []).map(c => ({
-              ...c,
-              row: c.row >= duplicatedRowIndex ? c.row + 1 : c.row,
-            }));
-
-            const newRows = [
-              ...rows.rows.slice(0, duplicatedRowIndex),
-              validatedRow,
-              ...rows.rows.slice(duplicatedRowIndex),
-            ];
-
-            const newErrors = shiftedErrors.concat(chunk.errors);
-            const newChanges = shiftedChanges.concat(chunk.changes);
-
-            const nextGroupedErrors = groupErrorsByRow(newErrors);
-            const nextGroupedChanges = groupChangesByRow(newChanges);
-
-            // Apply and push as one action
-            setRows({ rows: newRows, errors: newErrors, changes: newChanges });
-            setGroupedErrors(nextGroupedErrors);
-            setGroupedChanges(nextGroupedChanges);
-            setSelectedRows({});
-
-            pushHistory(`Duplicate row ${actualRowIndex + 1}`, prevState, {
-              rows: newRows,
-              errors: newErrors,
-              changes: newChanges,
-              groupedErrors: nextGroupedErrors,
-              groupedChanges: nextGroupedChanges,
-            });
-          } catch (err) {
-            console.error("Row validation failed (duplicate):", err);
-          }
-        })();
-      },
-      // Track which cell is currently focused for visual outline
-      setFocusedCell: (rowIndex, columnId) => {
-        if (rowIndex < 0 || !columnId) {
-          setFocusedCell(null);
-          return;
-        }
-
-        setFocusedCell({ rowIndex: rowIndex, colId: columnId });
-      },
-    },
-  });
-
   const parentRef = useRef<HTMLDivElement | null>(null);
   const rowVirtualizer = useVirtualizer({
-    count: table.getRowModel().rows.length,
+    count: data.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 36,
-    overscan: 20, // Increased from 10 to render more rows off-screen
+    overscan: 20,
   });
 
   const virtualItems = rowVirtualizer.getVirtualItems();
@@ -485,153 +229,110 @@ export default function DataPreview({
     rowVirtualizer,
     showErrors,
     cellRefs: cellRefs.current,
-    setFocusedCell: (focusedCell: {
-      rowIndex: number;
-      columnId: string | null;
-    }) => {
-      setFocusedCell({
-        rowIndex: focusedCell.rowIndex,
-        colId: focusedCell.columnId ?? "",
-      });
+    setFocusedCell: ({ rowIndex, columnId }) =>
+      setFocusedCell({ rowIndex, colId: columnId ?? "" }),
+  });
+
+  const table = useReactTable({
+    data,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    autoResetPageIndex,
+    getSortedRowModel: getSortedRowModel(),
+    onSortingChange: setSorting,
+    enableMultiRowSelection: true,
+    onRowSelectionChange: setSelectedRows,
+    state: { rowSelection: selectedRows, sorting },
+    meta: {
+      updateData: (rowIndex, columnId, value) => {
+        skipAutoResetPageIndex();
+        const actualRowIndex = showErrors
+          ? (groupedErrors?.[rowIndex]?.row ?? rowIndex)
+          : rowIndex;
+        const baseRow = controller.getBaseRow(actualRowIndex);
+        const targetField = ((mappings as Record<string, string>)?.[columnId] ??
+          columnId) as string;
+        const updatedRawRow = { ...baseRow, [targetField]: value } as Record<
+          string,
+          unknown
+        >;
+        controller.validateAndUpdateRow(
+          updatedRawRow,
+          actualRowIndex,
+          "replace",
+          `Edit row ${actualRowIndex + 1} in column ${columnId}`
+        );
+      },
+      deleteRows: rowIndices => {
+        skipAutoResetPageIndex();
+        controller.deleteRows(rowIndices, showErrors, groupedErrors ?? []);
+        setSelectedRows({});
+      },
+      duplicateRow: rowIndex => {
+        skipAutoResetPageIndex();
+        controller.duplicateRow(rowIndex, showErrors, groupedErrors ?? []);
+        setSelectedRows({});
+      },
+      setFocusedCell: (rowIndex, columnId) => {
+        if (rowIndex < 0 || !columnId) {
+          setFocusedCell(null);
+          return;
+        }
+        setFocusedCell({ rowIndex, colId: columnId });
+      },
     },
   });
 
   const headerGroups = table.getHeaderGroups();
 
-  // Find And Replace
   const handleBulkFindReplace = async (params: {
     find: string;
     field: string;
     exactMatch?: boolean;
     replace: string;
   }) => {
-    const { find, field, exactMatch, replace } = params;
-    const base = toRegex(find, exactMatch);
-    const regex = base.flags.includes("g")
-      ? base
-      : new RegExp(base, `${base.flags}g`);
-
-    // Map of rows that were mutated to their new values for each field
-    const byRow = new Map<number, Record<string, unknown>>();
-    const affectedRows = new Set<number>(); // Set of rows that were mutated
-
-    for (let i = 0; i < data.length; i++) {
-      const actualRowIndex = showErrors ? (groupedErrors?.[i]?.row ?? i) : i;
-      const rowObj = data[i] ?? {};
-      const keys = field === "all" ? Object.keys(rowObj) : [field];
-
-      let mutated = false;
-      const raw = byRow.get(actualRowIndex) ?? {
-        ...(rows?.rows?.[actualRowIndex] ?? fileData.rows[actualRowIndex]),
-      };
-
-      // Loop through all keys in the row and check if they match the regex
-      // If they do, and will be changed by applying the replace string,
-      // then we add the row to the affectedRows set and the byRow map
-      for (const key of keys) {
-        const value = rowObj[key];
-        const stringValue = String(value);
-        if (value != null && regex.test(stringValue)) {
-          regex.lastIndex = 0;
-          const next = stringValue.replace(regex, replace ?? "");
-
-          if (next !== stringValue) {
-            mutated = true;
-            (raw as any)[key] = next;
-          }
-        }
-      }
-
-      if (mutated) {
-        byRow.set(actualRowIndex, raw);
-        affectedRows.add(actualRowIndex);
-      }
-    }
-
-    if (byRow.size === 0) return;
-
-    const sortedIndices = [...byRow.keys()].sort(
-      (a, b) => Number(a) - Number(b)
-    );
-    const runs: Array<{ start: number; indices: number[] }> = [];
-    let run: number[] = [];
-
-    /**
-     * Turn this:
-     * [2, 3, 4, 7, 8, 10]
-     * Into this:
-      [
-        { start: 2, indices: [2, 3, 4] },
-        { start: 7, indices: [7, 8] },
-        { start: 10, indices: [10] }
-      ]
-     */
-    for (let i = 0; i < sortedIndices.length; i++) {
-      if (i === 0 || sortedIndices[i] === sortedIndices[i - 1] + 1) {
-        run.push(sortedIndices[i]);
-      } else {
-        runs.push({ start: run[0], indices: run });
-        run = [sortedIndices[i]];
-      }
-    }
-
-    if (run.length) {
-      runs.push({ start: run[0], indices: [...run] });
-    }
-
-    const chunks: { chunk: ValidationChunk; indices: number[] }[] = [];
-    for (const run of runs) {
-      const rawRows = run.indices.map(i => byRow.get(i)!);
-      const chunk = await validateChunkOptimized(rawRows, run.start, mappings);
-      chunks.push({ chunk, indices: run.indices });
-    }
-
-    setRows(old => {
-      if (!old) return old;
-
-      const prevState = getTableState()!;
-      const mergedRows = old.rows.slice();
-
-      for (const { indices, chunk } of chunks) {
-        for (let i = 0; i < indices.length; i++) {
-          const index = chunk.startRow + i;
-          mergedRows[index] = chunk.rows[i];
-        }
-      }
-
-      const otherErrors = (old.errors ?? []).filter(
-        e => !affectedRows.has(e.row)
-      );
-      const otherChanges = (old.changes ?? []).filter(
-        c => !affectedRows.has(c.row)
-      );
-      const newErrors = otherErrors.concat(...chunks.map(c => c.chunk.errors));
-      const newChanges = otherChanges.concat(
-        ...chunks.map(c => c.chunk.changes)
-      );
-
-      const nextGroupedErrors = groupErrorsByRow(newErrors);
-      const nextGroupedChanges = groupChangesByRow(newChanges);
-
-      const nextState = {
-        rows: mergedRows,
-        errors: newErrors,
-        changes: newChanges,
-        groupedErrors: nextGroupedErrors,
-        groupedChanges: nextGroupedChanges,
-      };
-
-      pushHistory(
-        `Replace (${byRow.size} row${byRow.size === 1 ? "" : "s"})`,
-        prevState,
-        nextState
-      );
-
-      setGroupedErrors(nextGroupedErrors);
-      setGroupedChanges(nextGroupedChanges);
-
-      return { rows: mergedRows, errors: newErrors, changes: newChanges };
+    const result = await bulkFindReplace({
+      data,
+      rows,
+      fileDataRows: fileData?.rows ?? [],
+      mappings: mappings as Record<string, keyof User>,
+      find: params.find,
+      field: params.field,
+      exactMatch: params.exactMatch,
+      replace: params.replace,
+      validateChunk: async (r, s, m) =>
+        (await import("@/lib/validationClient")).validateChunkOptimized(
+          r,
+          s,
+          m
+        ),
+      getTableState: () => ({
+        rows: rows?.rows ?? [],
+        errors: rows?.errors ?? [],
+        changes: rows?.changes ?? [],
+      }),
     });
+    if (!result) return;
+
+    const prevState = getTableState()!;
+    setRows({
+      rows: result.nextRows,
+      errors: result.nextErrors,
+      changes: result.nextChanges,
+    });
+    setGroupedErrors(result.nextGroupedErrors);
+    setGroupedChanges(result.nextGroupedChanges);
+    pushHistory(
+      `Replace (${result.affectedSize} row${result.affectedSize === 1 ? "" : "s"})`,
+      prevState,
+      {
+        rows: result.nextRows,
+        errors: result.nextErrors,
+        changes: result.nextChanges,
+        groupedErrors: result.nextGroupedErrors,
+        groupedChanges: result.nextGroupedChanges,
+      }
+    );
   };
 
   const handleFind = async (params: {
@@ -649,29 +350,8 @@ export default function DataPreview({
       setFindMatches(new Set<string>());
       return;
     }
-
     const regex = toRegex(find, exactMatch);
-    const matches = new Set<string>();
-
-    // Work on the same data as the table currently in view
-    for (let i = 0; i < data.length; i++) {
-      if (field === "all") {
-        const keys = Object.keys(data[i] ?? {});
-        for (const key of keys) {
-          const value = data[i][key];
-          if (value != null && String(value).match(regex)) {
-            matches.add(`${i}:${key}`);
-          }
-        }
-      } else {
-        const value = data[i][field];
-        if (value != null && String(value).match(regex)) {
-          matches.add(`${i}:${field}`);
-        }
-      }
-    }
-
-    setFindMatches(matches);
+    setFindMatches(computeMatches(data, field, regex));
   };
 
   return (
@@ -796,7 +476,7 @@ export default function DataPreview({
           <div className="mt-4 border rounded-md">
             <div
               ref={parentRef}
-              className="overflow-auto h-[400px] scroll-smooth"
+              className="overflow-auto h_[400px] scroll-smooth"
             >
               <table className="table-fixed w-max text-sm border-separate border-spacing-0">
                 <thead className="sticky top-0 z-10 bg-gray-200 relative after:content-[''] after:absolute after:inset-x-0 after:-bottom-px after:h-px after:bg-gray-500">
@@ -874,7 +554,6 @@ export default function DataPreview({
                   ))}
                 </thead>
                 <tbody>
-                  {/* top spacer with skeleton effect */}
                   {virtualItems.length > 0 && virtualItems[0].start > 0 ? (
                     <tr style={{ height: virtualItems[0].start }}>
                       <td
@@ -900,10 +579,9 @@ export default function DataPreview({
                         {row.getVisibleCells().map((cell, index) => {
                           const w = getColumnWidth(cell.column.id);
                           const isRowNumber = cell.column.id === "_row";
-                          const targetFieldId =
-                            (mappings as Record<string, string>)?.[
-                              cell.column.id
-                            ] ?? cell.column.id;
+                          const targetFieldId = ((
+                            mappings as Record<string, keyof User>
+                          )?.[cell.column.id] ?? cell.column.id) as string;
                           const isFindMatch =
                             !isRowNumber &&
                             findMatches.has(`${row.index}:${targetFieldId}`);
@@ -966,7 +644,6 @@ export default function DataPreview({
                               ) : (
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    {/* Wrapper span receives focus when inner input/select cannot */}
                                     <span
                                       className="block w-full truncate align-middle"
                                       tabIndex={-1}
@@ -1013,7 +690,6 @@ export default function DataPreview({
                     );
                   })}
 
-                  {/* bottom spacer with skeleton effect */}
                   {virtualItems.length > 0 ? (
                     <tr
                       style={{

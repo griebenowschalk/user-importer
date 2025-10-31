@@ -6,7 +6,7 @@ export function Typography({
   className,
 }: {
   children: React.ReactNode;
-  as?: "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "p" | "span" | "div";
+  as?: "h1" | "h2" | "h4" | "h6" | "p" | "span";
   className?: string;
 }) {
   switch (as) {
@@ -32,17 +32,6 @@ export function Typography({
           {children}
         </h2>
       );
-    case "h3":
-      return (
-        <h3
-          className={cn(
-            "scroll-m-20 text-2xl font-semibold tracking-tight",
-            className
-          )}
-        >
-          {children}
-        </h3>
-      );
     case "h4":
       return (
         <h4
@@ -53,17 +42,6 @@ export function Typography({
         >
           {children}
         </h4>
-      );
-    case "h5":
-      return (
-        <h5
-          className={cn(
-            "scroll-m-20 text-lg font-semibold tracking-tight",
-            className
-          )}
-        >
-          {children}
-        </h5>
       );
     case "h6":
       return (
@@ -80,8 +58,6 @@ export function Typography({
       return <p className={cn("text-base", className)}>{children}</p>;
     case "span":
       return <span className={cn("text-xs", className)}>{children}</span>;
-    case "div":
-      return <div className={cn("text-base", className)}>{children}</div>;
     default:
       return <p className={cn("text-base", className)}>{children}</p>;
   }

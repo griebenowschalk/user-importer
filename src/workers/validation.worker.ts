@@ -9,7 +9,7 @@ import {
   ValidationProgress,
   ValidationChunk,
 } from "../types";
-import { columnHookRegistry, rowHookRegistry } from "../hooks/validationHooks";
+import { columnHookRegistry, rowHookRegistry } from "../lib/validationHooks";
 import {
   extractCleaningRules,
   rowHooks,

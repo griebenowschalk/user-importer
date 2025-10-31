@@ -13,7 +13,7 @@ export default function ImportProgress({
 }: ImportProgressProps) {
   useEffect(() => {
     data.valid.forEach((row: any) => {
-      if (!row.email) delete row.email;
+      if (!row.email || row.email === "") delete row.email;
     });
   }, [data]);
 

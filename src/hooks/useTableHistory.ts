@@ -5,7 +5,7 @@ import {
   GroupedRowChange,
   HistoryEntry,
   TableState,
-} from "../types";
+} from "@/types";
 
 const HISTORY_SIZE = 100;
 

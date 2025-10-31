@@ -107,7 +107,9 @@ function DownloadDialog({ onDownload }: DownloadDialogProps) {
             <DialogClose asChild>
               <Button variant="outline">Cancel</Button>
             </DialogClose>
-            <Button type="submit">Save</Button>
+            <Button data-testid="save-button" type="submit">
+              Save
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

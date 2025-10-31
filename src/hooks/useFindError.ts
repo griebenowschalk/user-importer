@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { GroupedRowError } from "../types";
+import { GroupedRowError } from "@/types";
 import { ColumnDef } from "@tanstack/react-table";
 import { Virtualizer } from "@tanstack/react-virtual";
 
@@ -81,19 +81,17 @@ function useFindError({
   const focusError = useCallback(
     (target: { row: number; field: string }) => {
       if (showErrors && !groupedErrors?.length) return;
-      // Resolve visible row index depending on current view
+
       const visibleRowIndex = showErrors
         ? groupedErrors!.findIndex(g => g.row === target.row)
         : target.row;
       if (visibleRowIndex < 0) return;
 
       try {
-        // Scroll the virtualizer to bring the row into view
         (rowVirtualizer as any).scrollToIndex(visibleRowIndex, {
           align: "center",
         });
       } catch {
-        // If virtualizer throws, also try native scroll fallback
         const colIdFallback = columnIdByField.get(String(target.field));
         if (colIdFallback) {
           const fallbackKey = `${visibleRowIndex}:${colIdFallback}`;
@@ -102,14 +100,11 @@ function useFindError({
         }
       }
 
-      // After scroll, focus the specific cell's input/select
       const colId = columnIdByField.get(String(target.field));
       if (!colId) return;
 
-      // Store a reference key for the TD and set the focused cell for outline styling
       const key = `${visibleRowIndex}:${colId}`;
       setFocusedCell({ rowIndex: visibleRowIndex, columnId: colId });
-      // Defer to next frame so DOM is in place after virtualization
       requestAnimationFrame(() => {
         const td = cellRefs.get(key);
         const focusable = td?.querySelector<HTMLElement>("input,select");
