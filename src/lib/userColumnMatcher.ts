@@ -249,32 +249,6 @@ class UserColumnMatcher {
     return mapping;
   }
 
-  /**
-   * It maps a row object (e.g., from a CSV) to a partial User object using a header-to-field mapping, regardless of key order.
-   * Example:
-   * row = { "Email": "bob@example.com", "First Name": "Bob" }
-   * mapping = { "First Name": "firstName", "Email": "email" }
-   * Output: { firstName: "Bob", email: "bob@example.com" }
-   * @param row - The row object to map to a User object.
-   * @param mapping - The header-to-field mapping.
-   * @returns The mapped User object.
-   */
-  static mapRowToUser(
-    row: Record<string, unknown>,
-    mapping: UserFieldMapping
-  ): Partial<User> {
-    const out: Partial<User> = {};
-    for (const [src, field] of Object.entries(mapping)) {
-      if (Object.prototype.hasOwnProperty.call(row, src)) {
-        const value = row[src as keyof typeof row];
-        if (value !== undefined) {
-          out[field] = value as never;
-        }
-      }
-    }
-    return out;
-  }
-
   static findBestUserFieldMatch(
     header: string
   ): { field: keyof User; exactMatch: boolean; score?: number } | null {

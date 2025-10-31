@@ -262,30 +262,6 @@ export function getGroupedFieldMessages(
   );
 }
 
-export const checkValidNumber = (country: string, number: string) => {
-  const countryCodesList = customList(
-    "countryCode" as CountryProperty,
-    "{countryCallingCode}"
-  );
-  const alpha2Code = toAlpha2(country);
-  const callingCode = alpha2Code
-    ? (countryCodesList[alpha2Code as keyof typeof countryCodesList] as string)
-    : "";
-
-  try {
-    const phoneNumber = isValidPhoneNumber(number, {
-      defaultCountry: alpha2Code as CountryCode,
-    });
-
-    return {
-      valid: phoneNumber,
-      callingCode,
-    };
-  } catch {
-    return { valid: false, callingCode };
-  }
-};
-
 export const checkValidNumberCore = (country: string, number: string) => {
   const countryCodesList = customList(
     "countryCode" as CountryProperty,
@@ -328,7 +304,7 @@ export const numberUpdate = (
     newNumber = number.startsWith(`+${callingCode}`)
       ? number
       : `+${callingCode}${(number as string).slice(1)}`;
-    validNumber = checkValidNumber(country as string, newNumber).valid;
+    validNumber = checkValidNumberCore(country as string, newNumber).valid;
   }
 
   if (!validNumber) {
